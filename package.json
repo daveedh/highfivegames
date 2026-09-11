@@ -1,0 +1,21 @@
+{
+  "name": "highfivegames",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "playcanvas": "^2.22.2"
+  },
+  "devDependencies": {
+    "typescript": "~6.0.3",
+    "vite": "^8.3.0"
+  },
+  "engines": {
+    "node": ">=22.23.2"
+  }
+}
