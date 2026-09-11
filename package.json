@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "prototype:walk": "vite --open /prototype-walk-feel.html",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview"
   },
