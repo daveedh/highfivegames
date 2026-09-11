@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "prototype:walk": "vite --open /prototype-walk-feel.html",
+    "prototype:guard": "vite --open /prototype-guard.html",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview"
   },
