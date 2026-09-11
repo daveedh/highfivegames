@@ -378,10 +378,15 @@ WAYPOINTS.forEach(([x, z], i) => {
 });
 
 const guard = new pc.Entity('guard');
-guard.addComponent('render', { type: 'capsule', material: GUARD_CALM });
 guard.addComponent('collision', { type: 'capsule', radius: GUARD_RADIUS, height: guardCfg.guardHeight });
 guard.addComponent('rigidbody', { type: 'kinematic', friction: 0.6, restitution: 0 });
 app.root.addChild(guard);
+
+// The visuals hang off an unscaled collider: scaling the guard entity itself
+// would scale its physics capsule too, which floated the corpse off the floor.
+const body = new pc.Entity('body');
+body.addComponent('render', { type: 'capsule', material: GUARD_CALM });
+guard.addChild(body);
 
 // A blue "eye" band so you can read which way it is facing at a glance.
 const visor = new pc.Entity('visor');
@@ -417,29 +422,31 @@ const g = {
 /** Rebuild guard geometry from the current config. Called on every slider move. */
 const applyGuardShape = (): void => {
   const h = guardCfg.guardHeight;
-  guard.setLocalScale(GUARD_RADIUS * 2, h / 2, GUARD_RADIUS * 2);
+  // The capsule primitive is 1 m tall and 1 m across at unit scale.
+  body.setLocalScale(GUARD_RADIUS * 2, h / 2, GUARD_RADIUS * 2);
+  body.setLocalPosition(0, 0, 0);
   if (guard.collision) {
     guard.collision.height = h;
     guard.collision.radius = GUARD_RADIUS;
   }
-  // Children are in the parent's squashed local space, so undo that scale.
-  const eyeLocalY = 0.62;
-  visor.setLocalScale(1.02, 0.14 / (h / 2), 0.55);
-  visor.setLocalPosition(0, eyeLocalY, -0.52);
+  // Everything below is now plain metres: the parent is unscaled.
+  const eyeY = h * 0.3;
+  visor.setLocalScale(GUARD_RADIUS * 1.9, 0.14, GUARD_RADIUS * 1.1);
+  visor.setLocalPosition(0, eyeY, -GUARD_RADIUS * 0.75);
 
   const range = guardCfg.sightRange;
   const mouth = 2 * Math.tan((guardCfg.coneAngle / 2) * pc.math.DEG_TO_RAD) * range;
-  cone.setLocalScale(mouth / (GUARD_RADIUS * 2), range / (h / 2), mouth / (GUARD_RADIUS * 2));
-  cone.setLocalPosition(0, eyeLocalY, -(range / 2) / (GUARD_RADIUS * 2));
+  cone.setLocalScale(mouth, range, mouth);
+  cone.setLocalPosition(0, eyeY, -range / 2);
 };
 
 const eyePosition = (): pc.Vec3 => {
   const p = guard.getPosition();
-  return new pc.Vec3(p.x, p.y + guardCfg.guardHeight * 0.31, p.z);
+  return new pc.Vec3(p.x, p.y + guardCfg.guardHeight * 0.3, p.z);
 };
 
 const setGuardMaterial = (m: pc.StandardMaterial): void => {
-  if (guard.render) guard.render.material = m;
+  if (body.render) body.render.material = m;
 };
 
 const stateMaterial = (): pc.StandardMaterial => {
@@ -632,7 +639,8 @@ const killGuard = (): void => {
       );
       debris.push(bit);
     }
-    if (guard.render) guard.render.enabled = false;
+    if (body.render) body.render.enabled = false;
+    if (visor.render) visor.render.enabled = false;
   }
 
   log(`guard DOWN after ${g.hits} hit${g.hits === 1 ? '' : 's'} (${guardCfg.deathStyle})`);
@@ -666,7 +674,9 @@ const reviveGuard = (): void => {
   }
   guard.setEulerAngles(0, 180, 0);
   g.yaw = 180;
-  if (guard.render) guard.render.enabled = true;
+  applyGuardShape();
+  if (body.render) body.render.enabled = true;
+  if (visor.render) visor.render.enabled = true;
   if (cone.render) cone.render.enabled = coneVisible;
   g.state = 'chase';
   setState('patrol');
@@ -987,13 +997,14 @@ const tickGuard = (dt: number): void => {
       // Fold: squash to a slab on the floor over about a third of a second.
       const t = Math.min((Date.now() - g.deathAt) / 350, 1);
       const h = guardCfg.guardHeight;
-      guard.setLocalScale(
-        GUARD_RADIUS * 2 * (1 + t * 0.6),
-        (h / 2) * (1 - t * 0.92),
-        GUARD_RADIUS * 2 * (1 + t * 0.6)
-      );
-      const p = guard.getPosition();
-      guard.rigidbody?.teleport(p.x, (h / 2) * (1 - t * 0.92) * 0.5, p.z);
+      const squash = 1 - t * 0.92;
+      const spread = 1 + t * 0.6;
+      body.setLocalScale(GUARD_RADIUS * 2 * spread, (h / 2) * squash, GUARD_RADIUS * 2 * spread);
+      // Sink with the fold so the slab ends up flat on the floor, not hovering.
+      const drop = (h / 2) * (1 - squash);
+      body.setLocalPosition(0, -drop, 0);
+      visor.setLocalPosition(0, h * 0.3 * squash - drop, -GUARD_RADIUS * 0.75 * spread);
+      visor.setLocalScale(GUARD_RADIUS * 1.9 * spread, 0.14 * squash, GUARD_RADIUS * 1.1 * spread);
     }
     return;
   }
@@ -1146,6 +1157,9 @@ const runSelftest = (dt: number): void => {
 };
 
 // ------------------------------------------------------------------ update --
+
+// Handle for headless checks from the browser console (and the selftest).
+(window as unknown as Record<string, unknown>).__guard = { app, guard, body, visor, cone, g, guardCfg };
 
 app.on('update', (dt: number) => {
   const step = Math.min(dt, 0.05);
