@@ -198,12 +198,12 @@ for (let z = 8; z >= -8; z -= 4) {
 staticBox('shelf-run-w', GREY_SHELF, [-3.5, 0.9, 0], [1.2, 1.8, 22]);
 staticBox('shelf-run-e', GREY_SHELF, [3.5, 0.9, 0], [1.2, 1.8, 22]);
 
-// --- Lane 2 (x ≈ -10): the squeeze. Aisles get narrower: 1.6 m, 1.1 m, 0.8 m. ---
+// --- Lane 2 (x ≈ -12): the squeeze. Aisles get narrower: 1.6 m, 1.1 m, 0.8 m. ---
 const squeeze = (z: number, gap: number, tag: string) => {
-  const armLength = 6;
+  const armLength = 5;
   const offset = gap / 2 + armLength / 2;
-  staticBox(`squeeze-${tag}-a`, GREY_SHELF, [-10 - offset, 0.9, z], [armLength, 1.8, 1]);
-  staticBox(`squeeze-${tag}-b`, GREY_SHELF, [-10 + offset, 0.9, z], [armLength, 1.8, 1]);
+  staticBox(`squeeze-${tag}-a`, GREY_SHELF, [-12 - offset, 0.9, z], [armLength, 1.8, 1]);
+  staticBox(`squeeze-${tag}-b`, GREY_SHELF, [-12 + offset, 0.9, z], [armLength, 1.8, 1]);
 };
 squeeze(8, 1.6, 'wide');
 squeeze(2, 1.1, 'mid');
@@ -216,15 +216,19 @@ STEP_HEIGHTS.forEach((h, i) => {
 });
 staticBox('ramp', GREY_SHELF, [10, 0.45, -8], [4, 0.3, 6], [-12, 0, 0]);
 
-// --- The waist-high shortcut from the showroom sketch (0.9 m). ---
-staticBox('shortcut-wall-w', GREY_WALL, [-4.5, 1.5, -13], [10, 3, 0.6]);
-staticBox('shortcut-wall-e', GREY_WALL, [4.5, 1.5, -13], [10, 3, 0.6]);
-staticBox('shortcut-ledge', YELLOW, [0, 0.45, -13], [2.4, 0.9, 0.6]);
+// --- The waist-high shortcuts from the showroom sketch. A wall across the ---
+// --- back of the room with two blocked gaps: 0.9 m (yellow) and 0.6 m (blue). ---
+const SHORTCUT_Z = -13;
+staticBox('back-wall-w', GREY_WALL, [-14.5, 1.5, SHORTCUT_Z], [15, 3, 0.6]);
+staticBox('back-wall-mid', GREY_WALL, [0, 1.5, SHORTCUT_Z], [9.2, 3, 0.6]);
+staticBox('back-wall-e', GREY_WALL, [14.5, 1.5, SHORTCUT_Z], [15, 3, 0.6]);
+staticBox('shortcut-high', YELLOW, [-5.8, 0.45, SHORTCUT_Z], [2.4, 0.9, 1]);
+staticBox('shortcut-low', BLUE, [5.8, 0.3, SHORTCUT_Z], [2.4, 0.6, 1]);
 
 // --- A doorway (1.2 m gap) and a blind corner, for mouse-turn feel. ---
-staticBox('door-wall-w', GREY_WALL, [-17, 1.5, 4], [8, 3, 0.5]);
-staticBox('door-wall-e', GREY_WALL, [-7.9, 1.5, 4], [8, 3, 0.5]);
-staticBox('corner-wall', GREY_WALL, [-16, 1.5, -8], [0.5, 3, 10]);
+staticBox('door-wall-w', GREY_WALL, [-17.3, 1.5, -9], [9.4, 3, 0.5]);
+staticBox('door-wall-e', GREY_WALL, [-7.7, 1.5, -9], [7.4, 3, 0.5]);
+staticBox('corner-wall', GREY_WALL, [-18, 1.5, -5], [0.5, 3, 6]);
 
 // --- Loose flat-packs to bump into (well under the ~40 dynamic body budget). ---
 const CLUTTER: Array<[number, number, number]> = [
