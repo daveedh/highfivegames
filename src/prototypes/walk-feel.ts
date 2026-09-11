@@ -27,6 +27,8 @@ type Feel = {
   jumpForce: number;
   groundDamping: number;
   gravity: number;
+  stepHeight: number;
+  stepSmooth: number;
   fov: number;
 };
 
@@ -42,6 +44,8 @@ const VARIANTS: Feel[] = [
     jumpForce: 0,
     groundDamping: 0.98,
     gravity: 18,
+    stepHeight: 0.4,
+    stepSmooth: 0.12,
     fov: 70
   },
   {
@@ -55,6 +59,8 @@ const VARIANTS: Feel[] = [
     jumpForce: 700,
     groundDamping: 0.995,
     gravity: 16,
+    stepHeight: 0.4,
+    stepSmooth: 0.12,
     fov: 90
   },
   {
@@ -68,6 +74,8 @@ const VARIANTS: Feel[] = [
     jumpForce: 900,
     groundDamping: 0.99,
     gravity: 12,
+    stepHeight: 0.4,
+    stepSmooth: 0.12,
     fov: 85
   }
 ];
@@ -312,6 +320,9 @@ const controller = player.script?.create(FirstPersonController, {
 }) as unknown as FirstPersonController;
 
 /** Push the current `feel` into the live scene. Called on every slider move. */
+let camBaseY = 0;
+let stepLag = 0;
+
 const applyFeel = () => {
   controller.lookSens = feel.lookSens;
   controller.speedGround = feel.walkSpeed;
@@ -322,7 +333,8 @@ const applyFeel = () => {
   const capsuleHeight = feel.eyeHeight + 0.1;
   if (player.collision) player.collision.height = capsuleHeight;
   // Capsule origin is its centre, so the eye sits just under the top cap.
-  camera.setLocalPosition(0, capsuleHeight / 2 - 0.1, 0);
+  camBaseY = capsuleHeight / 2 - 0.1;
+  camera.setLocalPosition(0, camBaseY - stepLag, 0);
 
   if (camera.camera) camera.camera.fov = feel.fov;
   physics.gravity.set(0, -feel.gravity, 0);
@@ -416,6 +428,8 @@ const KNOBS: Knob[] = [
   { label: 'Sprint multiplier', key: 'sprintMult', min: 1, max: 2.5, step: 0.05, hint: '1.0 = no sprint' },
   { label: 'Jump force', key: 'jumpForce', min: 0, max: 1400, step: 25, hint: '0 = no jump' },
   { label: 'Gravity', key: 'gravity', min: 6, max: 30, step: 0.5, hint: 'how fast you come down' },
+  { label: 'Step height', key: 'stepHeight', min: 0, max: 0.6, step: 0.05, hint: 'what you walk up without jumping' },
+  { label: 'Step smoothing', key: 'stepSmooth', min: 0, max: 0.35, step: 0.01, hint: 'how gently the view catches up' },
   { label: 'Ground damping', key: 'groundDamping', min: 0.95, max: 0.999, step: 0.001, hint: 'lower = stops dead' },
   { label: 'Field of view', key: 'fov', min: 55, max: 110, step: 1, hint: 'how much you can see' }
 ];
@@ -454,6 +468,8 @@ const settingsJson = (): string =>
       sprintMult: feel.sprintMult,
       jumpForce: feel.jumpForce,
       gravity: feel.gravity,
+      stepHeight: feel.stepHeight,
+      stepSmooth: feel.stepSmooth,
       groundDamping: feel.groundDamping,
       fov: feel.fov
     },
@@ -537,21 +553,83 @@ const isGrounded = (): boolean => {
   return !!physics.raycastFirst(from, rayEnd);
 };
 
-// Headless smoke test (?selftest=1): shove the body and report how far it went,
-// so a CI-less check can still prove physics is stepping.
-const selftest = params.get('selftest') === '1';
-let selftestReport = 'pending';
+// Step assist. A dynamic capsule cannot climb anything on its own, so probe
+// ahead at ankle height: if the obstacle's top is below `stepHeight` and there
+// is nothing at head-of-step level, lift the body onto it. This is what makes
+// kerbs, thresholds and low pallets walkable instead of walls.
+const probeLow = new pc.Vec3();
+const probeHigh = new pc.Vec3();
+const probeTop = new pc.Vec3();
+const probeEnd = new pc.Vec3();
+const keepVelocity = new pc.Vec3();
+
+const tryStepUp = (): void => {
+  if (feel.stepHeight <= 0 || !player.rigidbody) return;
+
+  const vel = player.rigidbody.linearVelocity;
+  const speed = Math.hypot(vel.x, vel.z);
+  if (speed < 0.5 || vel.y > 0.5) return;
+
+  const pos = player.getPosition();
+  const feetY = pos.y - (feel.eyeHeight + 0.1) / 2;
+  // Start the probes just outside the capsule so they cannot hit the player.
+  const ox = (vel.x / speed) * (CAPSULE_RADIUS * 0.95);
+  const oz = (vel.z / speed) * (CAPSULE_RADIUS * 0.95);
+  const dx = (vel.x / speed) * 0.3;
+  const dz = (vel.z / speed) * 0.3;
+
+  // Something at ankle height?
+  probeLow.set(pos.x + ox, feetY + 0.06, pos.z + oz);
+  probeEnd.set(probeLow.x + dx, probeLow.y, probeLow.z + dz);
+  const low = physics.raycastFirst(probeLow, probeEnd);
+  if (!low || low.entity === player) return;
+
+  // Anything just above the step is a wall, not a step.
+  probeHigh.set(pos.x + ox, feetY + feel.stepHeight + 0.06, pos.z + oz);
+  probeEnd.set(probeHigh.x + dx, probeHigh.y, probeHigh.z + dz);
+  if (physics.raycastFirst(probeHigh, probeEnd)) return;
+
+  // Find the top of the step by dropping a ray onto it.
+  probeTop.set(pos.x + ox + dx * 0.6, feetY + feel.stepHeight + 0.2, pos.z + oz + dz * 0.6);
+  probeEnd.set(probeTop.x, feetY - 0.05, probeTop.z);
+  const top = physics.raycastFirst(probeTop, probeEnd);
+  if (!top) return;
+
+  const rise = top.point.y - feetY;
+  if (rise <= 0.02 || rise > feel.stepHeight) return;
+
+  keepVelocity.copy(vel);
+  player.rigidbody.teleport(pos.x, pos.y + rise + 0.03, pos.z);
+  player.rigidbody.linearVelocity = keepVelocity;
+  // The body snaps; the view catches up over `stepSmooth` seconds.
+  stepLag = Math.min(stepLag + rise, feel.stepHeight);
+};
+
+// Headless smoke test (?selftest=step): drive the body into the step ladder and
+// report where it ends up, so the step assist can be checked without a human.
+const selftest = params.get('selftest') === 'step';
 if (selftest) {
-  window.setTimeout(() => {
-    player.rigidbody?.applyImpulse(0, 0, -600);
-  }, 1000);
-  window.setTimeout(() => {
-    const moved = SPAWN.z - player.getPosition().z;
-    selftestReport = `moved ${moved.toFixed(2)} m, grounded ${isGrounded()}`;
-  }, 3000);
+  overlay.classList.add('hidden');
+  player.rigidbody?.teleport(10, 1.2, 11);
+  app.on('update', () => {
+    const rb = player.rigidbody;
+    if (!rb) return;
+    const v = rb.linearVelocity;
+    rb.linearVelocity = new pc.Vec3(0, v.y, -3);
+  });
 }
 
-app.on('update', () => {
+app.on('update', (dt: number) => {
+  tryStepUp();
+
+  if (stepLag > 0.0005) {
+    stepLag *= Math.exp(-dt / Math.max(feel.stepSmooth, 0.001));
+    camera.setLocalPosition(0, camBaseY - stepLag, 0);
+  } else if (stepLag !== 0) {
+    stepLag = 0;
+    camera.setLocalPosition(0, camBaseY, 0);
+  }
+
   const v = player.rigidbody?.linearVelocity ?? pc.Vec3.ZERO;
   const speed = Math.hypot(v.x, v.z);
   const pos = player.getPosition();
@@ -572,7 +650,7 @@ app.on('update', () => {
   $('r-eye').textContent = camera.getPosition().y.toFixed(2);
   $('r-ground').textContent = isGrounded() ? 'yes' : 'no';
   $('r-timer').textContent = selftest
-    ? selftestReport
+    ? `z ${pos.z.toFixed(1)} · feet ${(pos.y - (feel.eyeHeight + 0.1) / 2).toFixed(2)}`
     : runStart !== null
       ? 'running…'
       : lastResult;
