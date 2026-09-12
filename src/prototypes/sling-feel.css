@@ -1,0 +1,251 @@
+/* THROWAWAY PROTOTYPE styles — see sling-feel.ts. Layers on walk-feel.css. */
+
+/* --- crosshair states ---------------------------------------------------- */
+
+#crosshair.drawing {
+  background: #ffd45e;
+}
+
+#crosshair.empty {
+  background: rgba(255, 90, 80, 0.9);
+}
+
+#hitmarker {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 26px;
+  height: 26px;
+  margin: -13px 0 0 -13px;
+  opacity: 0;
+}
+
+#hitmarker.on {
+  opacity: 1;
+  animation: hitpop 0.18s ease-out;
+}
+
+#hitmarker.kill i {
+  background: #ff5f56;
+}
+
+#hitmarker i {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 12px;
+  height: 2px;
+  margin: -1px 0 0 -6px;
+  background: #fff;
+  box-shadow: 0 0 3px rgba(0, 0, 0, 0.9);
+}
+
+#hitmarker i:nth-child(1) {
+  transform: translate(-7px, -7px) rotate(45deg);
+}
+#hitmarker i:nth-child(2) {
+  transform: translate(7px, -7px) rotate(-45deg);
+}
+#hitmarker i:nth-child(3) {
+  transform: translate(-7px, 7px) rotate(-45deg);
+}
+#hitmarker i:nth-child(4) {
+  transform: translate(7px, 7px) rotate(45deg);
+}
+
+@keyframes hitpop {
+  0% {
+    transform: scale(1.9);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+/* --- draw meter ---------------------------------------------------------- */
+
+#draw-meter {
+  position: absolute;
+  left: 50%;
+  top: calc(50% + 26px);
+  transform: translateX(-50%);
+  width: 120px;
+  height: 5px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  overflow: hidden;
+  opacity: 0;
+  transition: opacity 0.1s;
+}
+
+#draw-meter.on {
+  opacity: 1;
+}
+
+#draw-fill {
+  height: 100%;
+  width: 0%;
+  background: #ffd45e;
+}
+
+#draw-meter.full #draw-fill {
+  background: #6ee7a0;
+}
+
+/* --- pouch --------------------------------------------------------------- */
+
+#pouch {
+  position: absolute;
+  left: 50%;
+  bottom: 58px;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 6px;
+}
+
+#pouch i {
+  display: block;
+  width: 26px;
+  height: 10px;
+  border-radius: 3px;
+  background: #ffd45e;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.6);
+}
+
+#pouch i.spent {
+  background: rgba(255, 255, 255, 0.16);
+}
+
+#tier-bar {
+  position: absolute;
+  left: 50%;
+  bottom: 78px;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 8px;
+}
+
+#tier-bar span {
+  padding: 3px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  background: rgba(12, 14, 20, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  color: #9aa3b2;
+}
+
+#tier-bar span.on {
+  background: #ffd45e;
+  border-color: #ffd45e;
+  color: #14161c;
+}
+
+#tier-bar span.broke {
+  opacity: 0.35;
+}
+
+/* --- range banner -------------------------------------------------------- */
+
+#range-banner {
+  position: absolute;
+  left: 50%;
+  top: 18px;
+  transform: translateX(-50%);
+  padding: 6px 16px;
+  border-radius: 999px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  font-variant-numeric: tabular-nums;
+  background: rgba(12, 14, 20, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+}
+
+#range-banner.clear {
+  color: #6ee7a0;
+  border-color: #6ee7a0;
+}
+
+#toast {
+  position: absolute;
+  left: 50%;
+  top: 56px;
+  transform: translateX(-50%);
+  padding: 5px 14px;
+  border-radius: 999px;
+  font-size: 13px;
+  background: rgba(12, 14, 20, 0.85);
+  border: 1px solid rgba(255, 212, 94, 0.5);
+  color: #ffd45e;
+  opacity: 0;
+  transition: opacity 0.25s;
+}
+
+#toast.on {
+  opacity: 1;
+  transition: none;
+}
+
+/* --- panel extras -------------------------------------------------------- */
+
+#panel select {
+  width: 100%;
+  margin: 4px 0 12px;
+  padding: 5px;
+  border-radius: 6px;
+  background: #222733;
+  color: #f2f2f2;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  font: inherit;
+  font-size: 12px;
+  pointer-events: auto;
+}
+
+#proto-ui select {
+  pointer-events: auto;
+}
+
+.toggles {
+  display: grid;
+  gap: 4px;
+  margin: 2px 0 12px;
+}
+
+.toggles label {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12.5px;
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.toggles input {
+  accent-color: #4c8dff;
+}
+
+#panel .note {
+  margin: 0 0 10px;
+  font-size: 11px;
+  line-height: 1.4;
+  color: #9aa3b2;
+}
+
+#selftest-log {
+  position: absolute;
+  left: 16px;
+  bottom: 16px;
+  max-width: 460px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: rgba(6, 8, 12, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  font-family: ui-monospace, monospace;
+  font-size: 12px;
+  white-space: pre-wrap;
+}
+
+#selftest-log.hidden {
+  display: none;
+}
