@@ -3,7 +3,8 @@
  * Three playable interaction variants on ?variant=A|B|C, not a paper inventory demo:
  * this question needs the existing PlayCanvas/Ammo feel-prototype environment.
  * Five slots, FIFO, tier damage, finite stock, and Pull and Hold are already settled.
- * Grab rules, empty feedback, and tier physics below are candidates, NOT decisions.
+ * Chosen live: B's grab/load rules, heavier/slower Heavy objects, message-only empty feedback.
+ * Audio is deferred: neither Web Audio nor native reference playback was audible to the user.
  * Run: npm run prototype:ammo. Plain English item names requested for this playtest.
  */
 import * as pc from 'playcanvas';
@@ -19,13 +20,13 @@ type Tier = { slots: number; damage: number; mass: number; speed: number; bounce
 const tiers: Record<TierKey, Tier> = {
   light: { slots: 1, damage: 1, mass: 0.8, speed: 1.15, bounce: 0.4, shove: 80 },
   medium: { slots: 2, damage: 2, mass: 2, speed: 1, bounce: 0.4, shove: 320 },
-  heavy: { slots: 3, damage: 4, mass: 5.2, speed: 0.72, bounce: 0.25, shove: 620 }
+  heavy: { slots: 3, damage: 4, mass: 8, speed: 0.55, bounce: 0.12, shove: 620 }
 };
 const variants = [
   { key: 'A', name: 'Point and pocket', reach: 2.5, cone: 0, manual: false, empty: 'text',
     blurb: 'Aim exactly at an object, tap E. The first item loads itself. Empty: a message.' },
-  { key: 'B', name: 'Grab and go', reach: 3.5, cone: 12, manual: false, empty: 'shelves',
-    blurb: 'Aim near an object, tap E. The first item loads itself. Empty: point out visible stock.' },
+  { key: 'B', name: 'Grab and go', reach: 3.5, cone: 12, manual: false, empty: 'text',
+    blurb: 'Chosen: aim near an object, tap E; loading is automatic. Empty: a message. Sound is deferred.' },
   { key: 'C', name: 'Pocket, then load', reach: 3.5, cone: 12, manual: true, empty: 'shelves',
     blurb: 'Forgiving E pickup. Press R to load the next item before each shot. No refill button.' }
 ];
@@ -575,9 +576,53 @@ function grab(): void {
   say(`${item.name} pocketed${cfg.manual && !loaded ? ' - R to load' : ''}`);
   focus = null;
 }
+let clickAudio: AudioContext | null = null;
+let clickBuffer: AudioBuffer | null = null;
+let lastClick = -Infinity;
+async function dryFireClick(): Promise<boolean> {
+  const now = performance.now();
+  if (now - lastClick < 100) return false;
+  lastClick = now;
+  try {
+    clickAudio ??= new AudioContext();
+    if (!clickBuffer) {
+      clickBuffer = clickAudio.createBuffer(1, Math.ceil(clickAudio.sampleRate * 0.055), clickAudio.sampleRate);
+      const samples = clickBuffer.getChannelData(0);
+      for (let i = 0; i < samples.length; i++) samples[i] = Math.random() * 2 - 1;
+    }
+    await clickAudio.resume();
+    if (clickAudio.state !== 'running') throw new Error(`Audio engine is ${clickAudio.state}`);
+    const source = clickAudio.createBufferSource();
+    source.buffer = clickBuffer;
+    const filter = clickAudio.createBiquadFilter();
+    filter.type = 'bandpass';
+    filter.frequency.value = 1500;
+    filter.Q.value = 1.8;
+    const gain = clickAudio.createGain();
+    gain.gain.setValueAtTime(0.001, clickAudio.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.35, clickAudio.currentTime + 0.002);
+    gain.gain.exponentialRampToValueAtTime(0.001, clickAudio.currentTime + 0.05);
+    source.connect(filter).connect(gain).connect(clickAudio.destination);
+    source.onended = () => { source.disconnect(); filter.disconnect(); gain.disconnect(); };
+    source.start();
+    return true;
+  } catch (error) {
+    console.error('Dry-fire audio unavailable', error);
+    say('Dry-fire sound unavailable in this browser.');
+    return false;
+  }
+}
 function emptyClick(): void {
-  say(queue.length ? 'Press R to load the next item.' : 'Pouch empty. E grabs shelf or fallen stock.');
-  if (!queue.length && cfg.empty === 'shelves') revealUntil = performance.now() + 2400;
+  if (queue.length) { say('Press R to load the next item.'); return; }
+  if (cfg.empty === 'click' || cfg.empty === 'click-message') {
+    revealUntil = 0;
+    if (cfg.empty === 'click-message') say('Pouch empty. E grabs shelf or fallen stock.');
+    else el('ammo-message').textContent = '';
+    void dryFireClick();
+    return;
+  }
+  say('Pouch empty. E grabs shelf or fallen stock.');
+  if (cfg.empty === 'shelves') revealUntil = performance.now() + 2400;
 }
 function fire(): void {
   if (!loaded || cooldown > 0) { if (!loaded) emptyClick(); return; }
@@ -656,10 +701,14 @@ ui.innerHTML = `
     Try grabbing beside a shelf back: forgiveness must not reach through it.</p>
     <p class="instructions dim">Plain English names for this playtest; grey-box shapes are provisional. No restock, no new shot bodies.
     Three stationary 4-HP dummies at the far end; guard behavior and kill effects are separate.</p></div>
-  <div id="panel"><h2>Unsettled grab / load feel</h2><p id="blurb"></p>
+  <div id="panel"><h2>Grab / load comparison</h2><p id="blurb"></p>
     <div id="grab-knobs"></div>
-    <label>Empty-pouch feedback<select id="empty-mode"><option value="text">Message only</option><option value="shelves">Message + visible stock markers</option></select></label>
-    <details><summary>Unsettled weight-tier physics</summary><div id="tier-knobs"></div></details>
+    <label>Empty-pouch feedback<select id="empty-mode"><option value="text">Message only</option><option value="shelves">Message + visible stock markers</option><option value="click">Dry-fire click</option><option value="click-message">Click + message</option></select></label>
+    <details id="audio-diagnostics"><summary>Audio diagnostics (deferred)</summary>
+      <button id="test-click">Test click</button> <button id="test-tone">Test tone</button><p class="note" id="sound-status"></p>
+      <audio id="reference-tone" controls style="width:100%" aria-label="Reference tone audio player"></audio>
+    </details>
+    <details><summary>Weight-tier physics</summary><div id="tier-knobs"></div></details>
     <p class="note">Locked: five FIFO slots (1/2/3), damage (1/2/4), 0.75s draw,
     14-48 m/s base speed, 0.35s reload, 55% draw walk speed, normal gravity.</p>
     <div id="panel-actions"><button id="reset">Reset playtest</button><button id="copy">Copy settings</button></div>
@@ -730,6 +779,48 @@ function switchVariant(delta: number): void {
 el('prev').onclick = () => switchVariant(-1);
 el('next').onclick = () => switchVariant(1);
 el('reset').onclick = reset;
+el('test-click').onclick = async () => {
+  el('sound-status').textContent = 'Starting audio...';
+  const started = await dryFireClick();
+  el('sound-status').textContent = started ? 'Click sent. Audio engine is running.' : 'Click not sent. Check the message above, then try again.';
+};
+const referenceTone = el('reference-tone');
+if (!(referenceTone instanceof HTMLAudioElement)) throw new Error('Missing reference audio player');
+const sampleRate = 44100;
+const sampleCount = Math.round(sampleRate * 0.4);
+const toneWav = new ArrayBuffer(44 + sampleCount * 2);
+const wav = new DataView(toneWav);
+for (const [offset, text] of [[0, 'RIFF'], [8, 'WAVE'], [12, 'fmt '], [36, 'data']] as const)
+  for (let i = 0; i < text.length; i++) wav.setUint8(offset + i, text.charCodeAt(i));
+wav.setUint32(4, 36 + sampleCount * 2, true);
+wav.setUint32(16, 16, true);
+wav.setUint16(20, 1, true);
+wav.setUint16(22, 1, true);
+wav.setUint32(24, sampleRate, true);
+wav.setUint32(28, sampleRate * 2, true);
+wav.setUint16(32, 2, true);
+wav.setUint16(34, 16, true);
+wav.setUint32(40, sampleCount * 2, true);
+for (let i = 0; i < sampleCount; i++) {
+  const time = i / sampleRate;
+  const envelope = Math.min(1, time / 0.02, (0.4 - time) / 0.02);
+  wav.setInt16(44 + i * 2, Math.round(Math.sin(time * 660 * Math.PI * 2) * 0.15 * envelope * 32767), true);
+}
+const toneUrl = URL.createObjectURL(new Blob([toneWav], { type: 'audio/wav' }));
+referenceTone.src = toneUrl;
+referenceTone.onended = () => { el('sound-status').textContent = 'Native audio player finished the reference tone.'; };
+window.addEventListener('pagehide', () => URL.revokeObjectURL(toneUrl), { once: true });
+el('test-tone').onclick = async () => {
+  el('sound-status').textContent = 'Starting native audio player...';
+  try {
+    referenceTone.currentTime = 0;
+    await referenceTone.play();
+    el('sound-status').textContent = 'Native audio player is playing the reference tone.';
+  } catch (error) {
+    console.error('Reference tone unavailable', error);
+    el('sound-status').textContent = `Audio error: ${error instanceof Error ? error.message : String(error)}`;
+  }
+};
 el('copy').onclick = async () => {
   const text = JSON.stringify({ question: 'Unsettled grab/load and tier feel', grab: cfg, tiers }, null, 2);
   el('dump').hidden = false; el('dump').textContent = text;
