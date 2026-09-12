@@ -1,0 +1,31 @@
+/* Throwaway ammo prototype; shares the existing feel-prototype shell. */
+#readout { max-width: 300px; font-size: 12px; }
+#readout h1 { font-size: 15px; margin: 0 0 8px; }
+#panel { width: 270px; max-height: calc(100vh - 110px); }
+#panel summary { cursor: pointer; margin: 12px 0; }
+#panel select { pointer-events: auto; }
+#ammo-focus {
+  position: absolute; top: calc(50% + 34px); left: 50%;
+  transform: translateX(-50%); text-align: center; padding: 6px 12px;
+  background: #101622dd; border-radius: 6px; white-space: pre-line;
+}
+#ammo-focus.blocked { color: #ff9a89; }
+#ammo-queue {
+  position: absolute; bottom: 84px; left: 50%; transform: translateX(-50%);
+  display: flex; gap: 6px; align-items: stretch;
+}
+.ammo-card { background: #151c28eb; border: 1px solid #758092; border-radius: 6px; padding: 7px; min-width: 76px; text-align: center; }
+.ammo-card.loaded { border: 2px solid #ffd45e; }
+.ammo-card svg { width: 34px; height: 28px; display: block; margin: auto; fill: #ffd45e; }
+.ammo-card small { display: block; color: #abb7c8; }
+#ammo-slots { position: absolute; bottom: 61px; left: 50%; transform: translateX(-50%); }
+#ammo-slots i { display: inline-block; width: 35px; height: 6px; margin: 0 2px; background: #ffd45e; }
+#ammo-slots i.free { background: #ffffff30; }
+#ammo-message { position: absolute; top: 64px; left: 50%; transform: translateX(-50%); background: #101622dd; padding: 6px 12px; border-radius: 6px; }
+#ammo-message:empty { display: none; }
+#zone-labels { position: absolute; inset: 0; overflow: hidden; }
+#zone-labels span { position: absolute; transform: translate(-50%, -50%); background: #163464dd; color: #ffe37a; padding: 3px 9px; white-space: nowrap; font-size: 12px; }
+#click-to-play > div { max-width: 470px; padding: 24px; }
+body.playing #panel, body.playing #readout .instructions { display: none; }
+#switcher { white-space: nowrap; font-size: 12px; }
+@media (max-width: 900px) { #readout { max-width: 210px; min-width: 0; } #panel { width: 220px; } }
