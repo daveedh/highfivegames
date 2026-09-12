@@ -604,6 +604,10 @@ const clearDebris = (): void => {
 };
 
 const killGuard = (): void => {
+  // Pressing K (or clicking Test death) repeatedly used to spawn another eight
+  // rigid bodies every time, with nothing ever removing them: the physics world
+  // grew without bound until the tab locked up.
+  if (g.state === 'down') return;
   setState('down');
   g.deathAt = Date.now();
   guardKills += 1;
@@ -639,6 +643,9 @@ const killGuard = (): void => {
       );
       debris.push(bit);
     }
+    // Hard ceiling regardless of how many deaths happen, so the dynamic-body
+    // count stays inside the ~40 budget from the #5 research.
+    while (debris.length > 16) debris.shift()?.destroy();
     if (body.render) body.render.enabled = false;
     if (visor.render) visor.render.enabled = false;
   }
@@ -1111,6 +1118,14 @@ const tickGuard = (dt: number): void => {
 let testPhase = 0;
 let testClock = 0;
 
+// A finished selftest page has nothing left to do, so stop stepping it. Left
+// running, several completed selftest tabs were still burning a core each.
+const finishSelftest = (): void => {
+  testPhase = 4;
+  app.timeScale = 0;
+  log('(frozen — selftest done)');
+};
+
 const runSelftest = (dt: number): void => {
   testClock += dt;
   if (testPhase === 0) {
@@ -1130,7 +1145,7 @@ const runSelftest = (dt: number): void => {
       testClock = 0;
     } else if (testClock > 20) {
       log('FAIL never charged');
-      testPhase = 4;
+      finishSelftest();
     }
     return;
   }
@@ -1141,14 +1156,14 @@ const runSelftest = (dt: number): void => {
       testClock = 0;
     } else if (testClock > 20) {
       log('FAIL never landed a hit');
-      testPhase = 4;
+      finishSelftest();
     }
     return;
   }
   if (testPhase === 3) {
     if (g.state === 'down') {
       log(`PASS died after ${g.hits} hits — selftest complete`);
-      testPhase = 4;
+      finishSelftest();
     } else if (testClock > 0.35) {
       testClock = 0;
       damageGuard();
@@ -1161,6 +1176,27 @@ const runSelftest = (dt: number): void => {
 // Handle for headless checks from the browser console (and the selftest).
 (window as unknown as Record<string, unknown>).__guard = { app, guard, body, visor, cone, g, guardCfg };
 
+// A page left open in a background tab or panel kept rendering and stepping
+// physics at full rate. Several copies at once was enough to wedge the machine,
+// so hand the frame back when nobody is looking.
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) app.timeScale = 0;
+  else app.timeScale = 1;
+});
+
+// The HUD is plain DOM: rewriting it 60 times a second (innerHTML especially)
+// costs more than the 3D scene does. Only touch a node when its text changes.
+const hudCache = new Map<string, string>();
+const hud = (id: string, text: string): void => {
+  if (hudCache.get(id) === text) return;
+  hudCache.set(id, text);
+  $(id).textContent = text;
+};
+
+const badgeEl = $('state-badge');
+const healthEl = $('guard-health');
+const heartsEl = $('hearts');
+
 app.on('update', (dt: number) => {
   const step = Math.min(dt, 0.05);
   tickGuard(step);
@@ -1170,23 +1206,35 @@ app.on('update', (dt: number) => {
   const pos = player.getPosition();
   if (pos.y < -5) respawnPlayer();
 
-  const badge = $('state-badge');
-  badge.textContent = g.state.toUpperCase();
-  badge.className = g.state;
+  if (hudCache.get('badge') !== g.state) {
+    hudCache.set('badge', g.state);
+    badgeEl.textContent = g.state.toUpperCase();
+    badgeEl.className = g.state;
+  }
 
-  const bars = Array.from({ length: guardCfg.hitsToKill }, (_, i) =>
-    i < guardCfg.hitsToKill - g.hits ? '<i></i>' : '<i class="gone"></i>'
-  ).join('');
-  $('guard-health').innerHTML = g.state === 'down' ? '' : bars;
-  $('hearts').innerHTML = Array.from({ length: MAX_HEARTS }, (_, i) =>
-    i < hearts ? '<span>♥</span>' : '<span class="spent">♥</span>'
-  ).join('');
+  const barsKey = g.state === 'down' ? 'down' : `${g.hits}/${guardCfg.hitsToKill}`;
+  if (hudCache.get('bars') !== barsKey) {
+    hudCache.set('bars', barsKey);
+    healthEl.innerHTML =
+      g.state === 'down'
+        ? ''
+        : Array.from({ length: guardCfg.hitsToKill }, (_, i) =>
+            i < guardCfg.hitsToKill - g.hits ? '<i></i>' : '<i class="gone"></i>'
+          ).join('');
+  }
 
-  $('r-state').textContent = g.state;
-  $('r-dist').textContent = distanceToPlayer().toFixed(1);
-  $('r-see').textContent = g.state === 'down' ? '–' : canSeePlayer() ? 'YES' : 'no';
-  $('r-hits').textContent = `${g.hits} / ${guardCfg.hitsToKill}`;
-  $('r-shots').textContent = String(shotsFired);
-  $('r-chase').textContent = chaseSeconds.toFixed(1);
-  $('r-kills').textContent = String(guardKills);
+  if (hudCache.get('hearts') !== String(hearts)) {
+    hudCache.set('hearts', String(hearts));
+    heartsEl.innerHTML = Array.from({ length: MAX_HEARTS }, (_, i) =>
+      i < hearts ? '<span>♥</span>' : '<span class="spent">♥</span>'
+    ).join('');
+  }
+
+  hud('r-state', g.state);
+  hud('r-dist', distanceToPlayer().toFixed(1));
+  hud('r-see', g.state === 'down' ? '–' : canSeePlayer() ? 'YES' : 'no');
+  hud('r-hits', `${g.hits} / ${guardCfg.hitsToKill}`);
+  hud('r-shots', String(shotsFired));
+  hud('r-chase', chaseSeconds.toFixed(1));
+  hud('r-kills', String(guardKills));
 });
