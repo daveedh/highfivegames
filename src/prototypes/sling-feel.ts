@@ -240,6 +240,9 @@ const GREY_SHELF = mat(0.74, 0.72, 0.68);
 const GREY_PROP = mat(0.86, 0.86, 0.86);
 const YELLOW = mat(0.9, 0.75, 0.12);
 const BLUE = mat(0.15, 0.32, 0.62);
+const GRIP = mat(0.24, 0.25, 0.28);
+const RUBBER = mat(0.2, 0.2, 0.23);
+const LEATHER = mat(0.4, 0.28, 0.18);
 
 const DUMMY_OK = mat(0.36, 0.4, 0.5);
 const DUMMY_HURT = mat(1, 1, 1);
@@ -385,60 +388,128 @@ const fpc = player.script?.create(FirstPersonController, {
 
 // ------------------------------------------------------- sling viewmodel ----
 
-// Two arms and a pouch, parented to the camera. The pouch slides back toward
-// your face as you draw, so the charge is readable without looking at the HUD.
+// A forked yoke on a handle, parented to the camera: the bottom of the U curves
+// round into two prongs, and the bands run from the prong tips to the pouch.
+// The pouch slides back toward your face as you draw, so the charge is readable
+// without looking at the HUD.
 const sling = new pc.Entity('sling-viewmodel');
 camera.addChild(sling);
 sling.setLocalPosition(0.26, -0.24, -0.55);
 
-const slingArm = (name: string, x: number, tilt: number): pc.Entity => {
+// Where the bands anchor, and so where the prongs have to end.
+const FORK_HALF_W = 0.105;
+const FORK_TIP_Y = 0.185;
+// Where the curve of the U hands over to the straight prongs, and how far it
+// dips below that. Dipping less than the half-width keeps the U wide and
+// shallow, which is what reads as a slingshot rather than a tuning fork.
+const FORK_JOIN_Y = 0.075;
+const FORK_DEPTH = 0.07;
+const FORK_THICK = 0.026;
+const HANDLE_BOTTOM_Y = -0.115;
+
+const rodMid = new pc.Vec3();
+const rodDir = new pc.Vec3();
+
+/** Stretch and aim a unit-height primitive so it spans `a` to `b`. */
+const layRod = (rod: pc.Entity, a: pc.Vec3, b: pc.Vec3, thick: number): void => {
+  rodMid.add2(a, b).mulScalar(0.5);
+  rodDir.sub2(b, a);
+  const len = Math.max(rodDir.length(), 0.001);
+  rod.setLocalPosition(rodMid);
+  rod.setLocalScale(thick, len, thick);
+  rodDir.mulScalar(1 / len);
+  // Point the primitive's local +Y down the rod.
+  const yaw = Math.atan2(rodDir.x, rodDir.z) * pc.math.RAD_TO_DEG;
+  const pitch = Math.asin(pc.math.clamp(rodDir.y, -1, 1)) * pc.math.RAD_TO_DEG;
+  rod.setLocalEulerAngles(pitch - 90, yaw, 0);
+};
+
+const rod = (name: string, type: string, material: pc.StandardMaterial): pc.Entity => {
   const e = new pc.Entity(name);
-  e.addComponent('render', { type: 'box', material: BLUE });
-  e.setLocalPosition(x, 0.1, 0);
-  e.setLocalScale(0.022, 0.2, 0.022);
-  e.setLocalEulerAngles(0, 0, tilt);
+  e.addComponent('render', { type, material });
   sling.addChild(e);
   return e;
 };
 
-const slingGrip = new pc.Entity('sling-grip');
-slingGrip.addComponent('render', { type: 'box', material: BLUE });
-slingGrip.setLocalPosition(0, -0.07, 0);
-slingGrip.setLocalScale(0.03, 0.16, 0.03);
-sling.addChild(slingGrip);
+/** A point on the U, from -1 at the left prong base through 0 at the bottom. */
+const forkPoint = (t: number): pc.Vec3 => {
+  const a = (t * Math.PI) / 2;
+  return new pc.Vec3(FORK_HALF_W * Math.sin(a), FORK_JOIN_Y - FORK_DEPTH * Math.cos(a), 0);
+};
 
-slingArm('sling-arm-l', -0.06, 14);
-slingArm('sling-arm-r', 0.06, -14);
+// The curve, as short straight segments with a ball at each joint to hide the
+// mitre. Keep the segments comfortably longer than the rod is thick — once they
+// get shorter than that, the joint balls dominate and the U reads as a string
+// of beads rather than a bent rod.
+const FORK_SEGMENTS = 8;
+for (let i = 0; i < FORK_SEGMENTS; i += 1) {
+  const a = forkPoint(-1 + (2 * i) / FORK_SEGMENTS);
+  const b = forkPoint(-1 + (2 * (i + 1)) / FORK_SEGMENTS);
+  layRod(rod(`fork-seg-${i}`, 'cylinder', BLUE), a, b, FORK_THICK);
+  if (i > 0) {
+    const joint = rod(`fork-joint-${i}`, 'sphere', BLUE);
+    joint.setLocalPosition(a);
+    joint.setLocalScale(FORK_THICK, FORK_THICK, FORK_THICK);
+  }
+}
 
+// The two straight prongs, each capped with the ball the band ties onto.
+for (const side of [-1, 1]) {
+  const tag = side < 0 ? 'l' : 'r';
+  layRod(
+    rod(`fork-prong-${tag}`, 'cylinder', BLUE),
+    new pc.Vec3(side * FORK_HALF_W, FORK_JOIN_Y, 0),
+    new pc.Vec3(side * FORK_HALF_W, FORK_TIP_Y, 0),
+    FORK_THICK
+  );
+  const tip = rod(`fork-tip-${tag}`, 'sphere', BLUE);
+  tip.setLocalPosition(side * FORK_HALF_W, FORK_TIP_Y, 0);
+  tip.setLocalScale(0.032, 0.032, 0.032);
+}
+
+// The handle, thicker than the fork and in a different colour so the grip
+// reads as the part of it you're actually holding.
+layRod(
+  rod('sling-handle', 'cylinder', GRIP),
+  new pc.Vec3(0, FORK_JOIN_Y - FORK_DEPTH + 0.005, 0),
+  new pc.Vec3(0, HANDLE_BOTTOM_Y, 0),
+  0.034
+);
+const handleButt = rod('sling-handle-butt', 'sphere', GRIP);
+handleButt.setLocalPosition(0, HANDLE_BOTTOM_Y, 0);
+handleButt.setLocalScale(0.034, 0.034, 0.034);
+
+// The pouch: a small leather cup seated against the back of the ball. It has to
+// sit on the near side — that's the side the pull acts through — so from the
+// player's eye it's always partly in front of the ball. Keep it narrower than
+// the ball so the orange still reads as a ring around it; a cup as wide as the
+// ball just hides the ammo completely.
+const POUCH_BACK = 0.03;
 const slingPouch = new pc.Entity('sling-pouch');
-slingPouch.addComponent('render', { type: 'sphere', material: AMMO_MAT.medium });
-slingPouch.setLocalScale(0.07, 0.07, 0.07);
+slingPouch.addComponent('render', { type: 'sphere', material: LEATHER });
+slingPouch.setLocalScale(0.05, 0.05, 0.03);
 sling.addChild(slingPouch);
 
+const slingAmmo = new pc.Entity('sling-ammo');
+slingAmmo.addComponent('render', { type: 'sphere', material: AMMO_MAT.medium });
+slingAmmo.setLocalScale(0.07, 0.07, 0.07);
+sling.addChild(slingAmmo);
+
 const bandL = new pc.Entity('band-l');
-bandL.addComponent('render', { type: 'box', material: GREY_PROP });
+bandL.addComponent('render', { type: 'cylinder', material: RUBBER });
 sling.addChild(bandL);
 const bandR = new pc.Entity('band-r');
-bandR.addComponent('render', { type: 'box', material: GREY_PROP });
+bandR.addComponent('render', { type: 'cylinder', material: RUBBER });
 sling.addChild(bandR);
 
-const BAND_TIP_L = new pc.Vec3(-0.105, 0.185, 0);
-const BAND_TIP_R = new pc.Vec3(0.105, 0.185, 0);
+const BAND_TIP_L = new pc.Vec3(-FORK_HALF_W, FORK_TIP_Y, 0);
+const BAND_TIP_R = new pc.Vec3(FORK_HALF_W, FORK_TIP_Y, 0);
+const BAND_THICK = 0.017;
 const pouchLocal = new pc.Vec3();
-const bandMid = new pc.Vec3();
-const bandDir = new pc.Vec3();
+const cupLocal = new pc.Vec3();
 
 const layBand = (band: pc.Entity, tip: pc.Vec3): void => {
-  bandMid.add2(tip, pouchLocal).mulScalar(0.5);
-  bandDir.sub2(pouchLocal, tip);
-  const len = Math.max(bandDir.length(), 0.001);
-  band.setLocalPosition(bandMid);
-  band.setLocalScale(0.012, len, 0.012);
-  bandDir.mulScalar(1 / len);
-  // Point the box's local +Y down the band.
-  const yaw = Math.atan2(bandDir.x, bandDir.z) * pc.math.RAD_TO_DEG;
-  const pitch = Math.asin(pc.math.clamp(bandDir.y, -1, 1)) * pc.math.RAD_TO_DEG;
-  band.setLocalEulerAngles(pitch - 90, yaw, 0);
+  layRod(band, tip, pouchLocal, BAND_THICK);
 };
 
 // ----------------------------------------------------------------- targets --
@@ -1605,16 +1676,21 @@ app.on('update', (rawDt: number) => {
   camera.setLocalPosition(shakeOffset.x, camBaseY - sink + shakeOffset.y, shakeOffset.z);
   if (camera.camera) camera.camera.fov = WALK.fov - cfg.fovPull * ch;
 
-  // Sling viewmodel: pouch pulls back toward your face as the band stretches.
-  slingPouch.render!.material = AMMO_MAT[tier];
-  pouchLocal.set(0, 0.07 - ch * 0.04, 0.02 + ch * 0.16);
-  slingPouch.setLocalPosition(pouchLocal);
-  slingPouch.enabled = canAfford(tier);
-  bandL.enabled = bandR.enabled = slingPouch.enabled;
-  if (slingPouch.enabled) {
-    layBand(bandL, BAND_TIP_L);
-    layBand(bandR, BAND_TIP_R);
-  }
+  // Sling viewmodel: the pouch pulls back, down and inward toward your cheek as
+  // the band stretches. Pouch and ball share one position — the point the bands
+  // tie to — so the whole assembly travels back together. The sling is held out
+  // at the right hip, so a straight-back pull walks the ball off the edge of the
+  // screen; drifting it inward keeps it framed and reads as a real anchor.
+  slingAmmo.render!.material = AMMO_MAT[tier];
+  pouchLocal.set(-ch * 0.06, 0.135 - ch * 0.09, 0.05 + ch * 0.07);
+  cupLocal.copy(pouchLocal);
+  cupLocal.z += POUCH_BACK;
+  slingPouch.setLocalPosition(cupLocal);
+  slingAmmo.setLocalPosition(pouchLocal);
+  // An empty pouch still hangs there — only the ammo disappears.
+  slingAmmo.enabled = canAfford(tier);
+  layBand(bandL, BAND_TIP_L);
+  layBand(bandR, BAND_TIP_R);
   sling.setLocalPosition(0.26 - ch * 0.03, -0.24 - ch * 0.02, -0.55 + ch * 0.05);
 
   // Aim aids.
