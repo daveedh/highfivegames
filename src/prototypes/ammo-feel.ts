@@ -64,6 +64,17 @@ const blue = material(0.12, 0.3, 0.58);
 const yellow = material(1, 0.8, 0.12);
 const dark = material(0.14, 0.15, 0.18);
 const leather = material(0.42, 0.25, 0.13);
+const ceramic = material(0.93, 0.91, 0.85);
+const wood = material(0.64, 0.39, 0.19);
+const green = material(0.17, 0.48, 0.2);
+const red = material(0.76, 0.16, 0.12);
+const glass = material(0.55, 0.79, 0.84);
+const cardboard = material(0.65, 0.5, 0.32);
+const metal = material(0.57, 0.61, 0.65);
+metal.metalness = 0.75;
+metal.useMetalness = true;
+metal.gloss = 0.65;
+metal.update();
 const colours = { light: material(0.95, 0.85, 0.4), medium: material(0.95, 0.54, 0.2), heavy: material(0.8, 0.24, 0.2) };
 function visual(parent: pc.Entity, type: string, size: number[], pos: number[], m: pc.StandardMaterial): pc.Entity {
   const e = new pc.Entity(type);
@@ -126,44 +137,265 @@ let fired = 0;
 let lastSpeed = 0;
 let stepOffset = 0;
 
-function makeShape(root: pc.Entity, shape: Shape, m: pc.StandardMaterial): void {
-  const part = (type: string, size: number[], pos = [0, 0, 0]) => visual(root, type, size, pos, m);
-  switch (shape) {
-    case 'mug':
-    case 'pot':
-    case 'glass':
-      part('cylinder', [0.7, 0.8, 0.7], [-0.1, 0, 0]);
-      if (shape === 'mug') part('torus', [0.45, 0.45, 0.45], [0.3, 0, 0]).setLocalEulerAngles(90, 0, 0);
-      if (shape === 'pot') part('sphere', [0.85, 0.5, 0.85], [0, 0.28, 0]);
+function makeShape(root: pc.Entity, name: string, accent: pc.StandardMaterial): void {
+  const part = (type: string, size: number[], pos = [0, 0, 0], m = accent) => visual(root, type, size, pos, m);
+  const ring = (size: number[], pos: number[], m = metal) => part('torus', size, pos, m);
+  const eyes = (y: number, z: number, gap: number) => {
+    for (const x of [-gap, gap]) part('sphere', [0.055, 0.07, 0.035], [x, y, z], dark);
+  };
+  const bowl = (m: pc.StandardMaterial) => {
+    part('sphere', [0.82, 0.55, 0.82], [0, -0.13, 0], m);
+    part('cylinder', [0.65, 0.025, 0.65], [0, 0.1, 0], dark);
+    ring([0.78, 0.16, 0.78], [0, 0.1, 0], m);
+  };
+  const packet = (m: pc.StandardMaterial) => {
+    part('box', [0.72, 0.78, 0.45], [0, -0.03, 0], m);
+    part('box', [0.8, 0.07, 0.2], [0, 0.4, 0], m);
+    part('box', [0.45, 0.35, 0.02], [0, 0, 0.235], ceramic);
+  };
+  switch (name) {
+    case 'Remote control':
+      part('box', [0.95, 0.65, 1], [0, 0, 0], dark);
+      part('sphere', [0.19, 0.1, 0.1], [-0.23, 0.35, -0.34], red);
+      for (let i = 0; i < 9; i++) part('box', [0.16, 0.07, 0.09], [(i % 3 - 1) * 0.25, 0.36, -0.12 + Math.floor(i / 3) * 0.18], grey);
       break;
-    case 'lamp':
-      part('cylinder', [0.7, 0.12, 0.7], [0, -0.43, 0]);
-      part('cylinder', [0.12, 0.65, 0.12], [0, -0.05, 0]);
-      part('cone', [0.8, 0.45, 0.8], [0, 0.25, 0]); break;
-    case 'chair':
-    case 'horse':
-      part('box', [1, 0.16, 0.9], [0, -0.02, 0]);
-      part('box', [1, 0.5, 0.15], [0, 0.22, 0.37]);
-      for (const x of [-0.36, 0.36]) for (const z of [-0.3, 0.3]) part('box', [0.12, 0.4, 0.12], [x, -0.3, z]);
-      if (shape === 'horse') part('sphere', [0.45, 0.4, 0.45], [0, 0.35, -0.25]);
+    case 'Sofa cushion':
+    case 'Pillow':
+      part('sphere', [1, 0.57, 0.86], [0, 0, 0], name === 'Pillow' ? ceramic : blue);
+      for (const x of [-0.44, 0.44]) part('box', [0.018, 0.025, 0.53], [x, 0, 0], ceramic);
       break;
-    case 'pan':
-      part('cylinder', [0.65, 0.22, 0.8], [-0.15, 0, 0]);
-      part('box', [0.5, 0.12, 0.14], [0.25, 0, 0]); break;
-    case 'plate': part('cylinder', [1, 0.25, 1]); break;
-    case 'ring': part('torus', [0.8, 0.8, 0.8]); break;
-    case 'roll': part('cylinder', [0.6, 1, 0.6]).setLocalEulerAngles(0, 0, 90); break;
-    case 'duck':
-    case 'bear':
-      part('sphere', [0.8, 0.6, 0.8], [0, -0.15, 0]);
-      part('sphere', [0.5, 0.5, 0.5], [0, 0.22, -0.12]);
-      part('box', [0.32, 0.13, 0.24], [0, 0.15, -0.4]); break;
-    case 'hammer':
-      part('box', [0.15, 0.8, 0.15], [0, -0.1, 0]);
-      part('box', [0.8, 0.25, 0.4], [0, 0.35, 0]); break;
-    case 'soft': part('sphere', [1, 0.65, 1]); break;
-    case 'clock': part('cylinder', [0.85, 0.4, 0.85]).setLocalEulerAngles(90, 0, 0); break;
-    default: part('box', [1, 1, 1]);
+    case 'Coaster stack':
+      for (let i = 0; i < 4; i++) part('cylinder', [0.9, 0.13, 0.9], [0, -0.3 + i * 0.18, 0], i % 2 ? wood : cardboard);
+      break;
+    case 'Houseplant':
+      part('cylinder', [0.58, 0.43, 0.58], [0, -0.28, 0], leather);
+      part('cylinder', [0.52, 0.025, 0.52], [0, -0.055, 0], dark);
+      part('cylinder', [0.04, 0.48, 0.04], [0, 0.18, 0], green);
+      for (let i = 0; i < 5; i++) {
+        const angle = i * Math.PI * 2 / 5;
+        part('sphere', [0.2, 0.13, 0.5], [Math.sin(angle) * 0.19, 0.18 + (i % 2) * 0.15, Math.cos(angle) * 0.19], green)
+          .setLocalEulerAngles(25, angle * pc.math.RAD_TO_DEG, 0);
+      }
+      break;
+    case 'Table lamp':
+    case 'Bedside lamp':
+      part('cylinder', [0.7, 0.1, 0.7], [0, -0.45, 0], metal);
+      part('cylinder', [0.07, 0.65, 0.07], [0, -0.08, 0], metal);
+      part('cone', [0.85, 0.43, 0.85], [0, 0.26, 0], ceramic);
+      ring([0.81, 0.06, 0.81], [0, 0.05, 0], wood);
+      break;
+    case 'Rolled-up rug':
+    case 'Duvet roll':
+      part('cylinder', [0.57, 1, 0.57], [0, 0, 0], name === 'Duvet roll' ? ceramic : red).setLocalEulerAngles(0, 0, 90);
+      for (const x of [-0.26, 0.26]) ring([0.6, 0.07, 0.6], [x, 0, 0], cardboard).setLocalEulerAngles(0, 0, 90);
+      for (const s of [0.39, 0.22]) ring([s, 0.03, s], [0.505, 0, 0], wood).setLocalEulerAngles(0, 0, 90);
+      break;
+    case 'Dinner plate':
+      part('cylinder', [0.97, 0.35, 0.97], [0, -0.12, 0], ceramic);
+      ring([0.93, 0.38, 0.93], [0, 0.03, 0], ceramic);
+      ring([0.7, 0.03, 0.7], [0, 0.095, 0], blue);
+      break;
+    case 'Wine glass':
+      part('cylinder', [0.55, 0.055, 0.55], [0, -0.46, 0], glass);
+      part('cylinder', [0.055, 0.47, 0.055], [0, -0.2, 0], glass);
+      part('sphere', [0.62, 0.52, 0.62], [0, 0.2, 0], glass);
+      part('cylinder', [0.44, 0.02, 0.44], [0, 0.405, 0], dark);
+      ring([0.5, 0.05, 0.5], [0, 0.41, 0], glass);
+      break;
+    case 'Napkin ring':
+      ring([0.63, 0.35, 0.63], [0, 0, 0], wood).setLocalEulerAngles(90, 0, 0);
+      part('box', [0.35, 0.2, 0.95], [0, 0, 0], ceramic).setLocalEulerAngles(0, 0, 20);
+      break;
+    case 'Candlestick':
+      part('cylinder', [0.65, 0.1, 0.65], [0, -0.45, 0], metal);
+      part('cylinder', [0.12, 0.4, 0.12], [0, -0.22, 0], metal);
+      part('cylinder', [0.35, 0.07, 0.35], [0, 0, 0], metal);
+      part('cylinder', [0.19, 0.43, 0.19], [0, 0.25, 0], ceramic);
+      part('cylinder', [0.022, 0.04, 0.022], [0, 0.48, 0], dark);
+      break;
+    case 'Fruit bowl':
+      bowl(ceramic);
+      part('sphere', [0.3, 0.29, 0.3], [-0.17, 0.17, 0.02], red);
+      part('sphere', [0.3, 0.28, 0.3], [0.16, 0.18, 0.12], green);
+      part('sphere', [0.48, 0.17, 0.14], [0.02, 0.25, -0.17], yellow).setLocalEulerAngles(0, -25, 0);
+      break;
+    case 'Dining chair':
+      part('box', [0.9, 0.12, 0.8], [0, -0.04, 0], wood);
+      for (const x of [-0.35, 0.35]) for (const z of [-0.3, 0.3])
+        part('box', [0.1, z < 0 ? 0.96 : 0.41, 0.1], [x, z < 0 ? -0.02 : -0.295, z], wood);
+      for (const y of [0.2, 0.4]) part('box', [0.75, 0.12, 0.09], [0, y, -0.3], wood);
+      break;
+    case 'Alarm clock':
+      part('cylinder', [0.78, 0.38, 0.78], [0, 0, 0], red).setLocalEulerAngles(90, 0, 0);
+      part('cylinder', [0.66, 0.015, 0.66], [0, 0, 0.2], ceramic).setLocalEulerAngles(90, 0, 0);
+      part('box', [0.035, 0.25, 0.02], [0, 0.1, 0.215], dark);
+      part('box', [0.22, 0.035, 0.02], [0.09, 0, 0.215], dark);
+      for (const x of [-0.25, 0.25]) {
+        part('sphere', [0.29, 0.17, 0.32], [x, 0.38, 0], metal);
+        part('box', [0.08, 0.16, 0.14], [x, -0.38, 0], metal);
+      }
+      break;
+    case 'Slipper':
+      part('sphere', [0.58, 0.13, 1], [0, -0.3, 0], dark);
+      part('sphere', [0.61, 0.43, 0.65], [0, -0.1, -0.15], red);
+      part('sphere', [0.42, 0.04, 0.35], [0, -0.03, 0.18], dark);
+      ring([0.5, 0.08, 0.4], [0, 0.015, 0.14], ceramic);
+      break;
+    case 'Mattress-in-a-box':
+    case 'Flatpack box':
+      part('box', [0.94, name === 'Flatpack box' ? 0.42 : 0.95, 0.7], [0, 0, 0], cardboard);
+      part('box', [0.12, name === 'Flatpack box' ? 0.43 : 0.96, 0.715], [0, 0, 0], wood);
+      part('box', [0.38, 0.23, 0.015], [-0.19, 0.06, 0.36], ceramic);
+      for (let i = 0; i < 4; i++) part('box', [0.035, 0.11, 0.02], [-0.3 + i * 0.06, 0.04, 0.375], dark);
+      break;
+    case 'Mug':
+      part('cylinder', [0.64, 0.83, 0.64], [-0.13, -0.04, 0], ceramic);
+      part('cylinder', [0.51, 0.02, 0.51], [-0.13, 0.365, 0], dark);
+      ring([0.61, 0.05, 0.61], [-0.13, 0.38, 0], ceramic);
+      ring([0.46, 0.15, 0.6], [0.25, -0.01, 0], ceramic).setLocalEulerAngles(90, 0, 0);
+      break;
+    case 'Colander':
+      bowl(metal);
+      for (const x of [-0.43, 0.43]) ring([0.23, 0.08, 0.28], [x, 0.04, 0], metal);
+      for (let i = 0; i < 7; i++) part('sphere', [0.05, 0.045, 0.02], [(i % 4 - 1.5) * 0.13, -0.06 - Math.floor(i / 4) * 0.13, 0.35], dark);
+      break;
+    case 'Rolling pin':
+      part('cylinder', [0.3, 0.68, 0.3], [0, 0, 0], wood).setLocalEulerAngles(0, 0, 90);
+      for (const x of [-0.42, 0.42]) part('cylinder', [0.13, 0.2, 0.13], [x, 0, 0], leather).setLocalEulerAngles(0, 0, 90);
+      break;
+    case 'Frying pan':
+      part('cylinder', [0.65, 0.44, 0.85], [-0.17, -0.15, 0], metal);
+      part('cylinder', [0.58, 0.05, 0.76], [-0.17, 0.085, 0], dark);
+      ring([0.63, 0.12, 0.82], [-0.17, 0.12, 0], metal);
+      part('box', [0.4, 0.18, 0.16], [0.28, 0.02, 0], dark);
+      break;
+    case 'Saucepan':
+    case 'Pressure cooker':
+      part('cylinder', [0.66, 0.62, 0.66], [0, -0.13, 0], metal);
+      if (name === 'Saucepan') {
+        part('box', [0.43, 0.12, 0.13], [0.32, 0.05, 0], dark);
+        part('cylinder', [0.56, 0.025, 0.56], [0, 0.19, 0], dark);
+        ring([0.64, 0.06, 0.64], [0, 0.19, 0], metal);
+      } else {
+        for (const x of [-0.39, 0.39]) part('box', [0.2, 0.12, 0.24], [x, 0.04, 0], dark);
+        part('sphere', [0.73, 0.18, 0.73], [0, 0.23, 0], metal);
+        part('box', [0.31, 0.1, 0.14], [0, 0.36, 0], dark);
+        part('cylinder', [0.065, 0.11, 0.065], [0.2, 0.34, 0], red);
+      }
+      break;
+    case 'Rubber duck':
+      part('sphere', [0.85, 0.57, 0.86], [0, -0.18, 0.04], yellow);
+      part('sphere', [0.5, 0.49, 0.5], [0, 0.2, 0.2], yellow);
+      part('sphere', [0.33, 0.1, 0.27], [0, 0.12, 0.44], accent);
+      for (const x of [-0.34, 0.34]) part('sphere', [0.16, 0.27, 0.48], [x, -0.15, 0], yellow);
+      eyes(0.25, 0.415, 0.14);
+      break;
+    case 'Toy hammer':
+      part('cylinder', [0.16, 0.7, 0.16], [0, -0.14, 0], wood);
+      part('box', [0.83, 0.29, 0.45], [0, 0.25, 0], blue);
+      for (const x of [-0.39, 0.39]) part('box', [0.1, 0.32, 0.48], [x, 0.25, 0], red);
+      break;
+    case 'Teddy bear':
+      part('sphere', [0.56, 0.52, 0.4], [0, -0.12, 0], wood);
+      part('sphere', [0.49, 0.43, 0.42], [0, 0.25, 0], wood);
+      for (const x of [-0.22, 0.22]) {
+        part('sphere', [0.18, 0.18, 0.13], [x, 0.43, 0], wood);
+        part('sphere', [0.25, 0.23, 0.35], [x, -0.37, 0.08], wood);
+        part('sphere', [0.22, 0.37, 0.23], [x * 1.5, -0.07, 0], wood);
+      }
+      part('sphere', [0.25, 0.17, 0.1], [0, 0.19, 0.2], cardboard);
+      part('sphere', [0.085, 0.055, 0.04], [0, 0.23, 0.25], dark);
+      eyes(0.3, 0.19, 0.1);
+      break;
+    case 'Xylophone':
+      part('box', [0.94, 0.25, 0.75], [0, -0.15, 0], wood);
+      for (let i = 0; i < 6; i++) part('box', [0.115, 0.09, 0.72 - i * 0.055], [-0.36 + i * 0.145, 0.02, 0], [red, yellow, green, blue, ceramic, accent][i]);
+      part('cylinder', [0.035, 0.65, 0.035], [0, 0.14, 0], wood).setLocalEulerAngles(0, 0, 65);
+      part('sphere', [0.12, 0.12, 0.12], [0.29, 0.28, 0], red);
+      break;
+    case 'Brick bucket':
+      part('cylinder', [0.75, 0.7, 0.75], [0, -0.12, 0], blue);
+      part('cylinder', [0.65, 0.03, 0.65], [0, 0.24, 0], dark);
+      for (let i = 0; i < 3; i++) {
+        const x = (i - 1) * 0.22;
+        const m = [red, yellow, green][i];
+        part('box', [0.22, 0.18, 0.25], [x, 0.3, 0], m);
+        part('cylinder', [0.07, 0.035, 0.07], [x, 0.41, 0], m);
+      }
+      break;
+    case 'Rocking horse':
+      part('sphere', [0.41, 0.32, 0.66], [0, -0.02, 0], wood);
+      part('box', [0.23, 0.48, 0.23], [0, 0.16, 0.23], wood).setLocalEulerAngles(-20, 0, 0);
+      part('sphere', [0.26, 0.2, 0.39], [0, 0.35, 0.32], wood);
+      for (const x of [-0.09, 0.09]) part('cone', [0.07, 0.16, 0.07], [x, 0.48, 0.22], wood);
+      for (const x of [-0.22, 0.22]) {
+        for (const z of [-0.22, 0.22]) part('box', [0.085, 0.3, 0.09], [x, -0.26, z], wood);
+        for (let i = 0; i < 5; i++) {
+          const z = (i - 2) * 0.18;
+          part('box', [0.13, 0.08, 0.2], [x, -0.44 + z * z * 0.7, z], dark).setLocalEulerAngles(-z * 65, 0, 0);
+        }
+      }
+      part('box', [0.37, 0.07, 0.26], [0, 0.14, -0.06], red);
+      eyes(0.38, 0.45, 0.11);
+      break;
+    case 'Tealight bag':
+      packet(glass);
+      for (let i = 0; i < 4; i++) {
+        const x = (i % 2 - 0.5) * 0.3;
+        const y = -0.2 + Math.floor(i / 2) * 0.3;
+        part('cylinder', [0.22, 0.055, 0.22], [x, y, 0.26], ceramic).setLocalEulerAngles(90, 0, 0);
+      }
+      break;
+    case 'Scented candle':
+      part('cylinder', [0.65, 0.84, 0.65], [0, -0.03, 0], glass);
+      part('cylinder', [0.56, 0.035, 0.56], [0, 0.4, 0], ceramic);
+      part('cylinder', [0.025, 0.08, 0.025], [0, 0.45, 0], dark);
+      part('box', [0.32, 0.33, 0.025], [0, -0.04, 0.325], ceramic);
+      break;
+    case 'Picture frame':
+      for (const x of [-0.42, 0.42]) part('box', [0.12, 0.95, 0.12], [x, 0, 0], wood);
+      for (const y of [-0.415, 0.415]) part('box', [0.85, 0.12, 0.12], [0, y, 0], wood);
+      part('box', [0.72, 0.74, 0.035], [0, 0, 0], ceramic);
+      part('sphere', [0.17, 0.17, 0.02], [0.17, 0.17, 0.03], yellow);
+      part('cone', [0.5, 0.43, 0.03], [-0.07, -0.11, 0.04], green);
+      break;
+    case 'Ice cube tray':
+      part('box', [0.85, 0.2, 0.95], [0, -0.2, 0], blue);
+      for (let i = 0; i < 6; i++) {
+        const x = (i % 2 - 0.5) * 0.37;
+        const z = (Math.floor(i / 2) - 1) * 0.29;
+        part('box', [0.27, 0.015, 0.21], [x, -0.095, z], dark);
+        part('box', [0.22, 0.11, 0.17], [x, -0.04, z], glass);
+      }
+      break;
+    case 'Toilet brush':
+      part('cylinder', [0.12, 0.68, 0.12], [0, 0.1, 0], blue);
+      part('sphere', [0.45, 0.37, 0.45], [0, -0.3, 0], ceramic);
+      for (let i = 0; i < 6; i++) {
+        const angle = i * Math.PI / 3;
+        part('box', [0.065, 0.3, 0.065], [Math.cos(angle) * 0.2, -0.29, Math.sin(angle) * 0.2], grey);
+      }
+      break;
+    case 'Lampshade':
+      part('cone', [0.96, 0.8, 0.96], [0, 0, 0], ceramic);
+      ring([0.92, 0.05, 0.92], [0, -0.4, 0], wood);
+      break;
+    case 'Watering can':
+      part('cylinder', [0.56, 0.64, 0.56], [-0.09, -0.12, 0], green);
+      ring([0.62, 0.12, 0.66], [-0.19, 0.2, 0], green).setLocalEulerAngles(90, 0, 0);
+      part('cylinder', [0.11, 0.64, 0.11], [0.27, 0.02, 0], green).setLocalEulerAngles(0, 0, -40);
+      part('sphere', [0.24, 0.075, 0.24], [0.47, 0.27, 0], metal).setLocalEulerAngles(0, 0, -40);
+      break;
+    case 'Meatball bag':
+      packet(blue);
+      for (const x of [-0.13, 0, 0.13]) part('sphere', [0.12, 0.12, 0.035], [x, 0, 0.26], leather);
+      break;
+    case 'Storage tub':
+      part('box', [0.9, 0.63, 0.72], [0, -0.13, 0], glass);
+      part('box', [1, 0.12, 0.8], [0, 0.25, 0], blue);
+      for (const x of [-0.48, 0.48]) part('box', [0.06, 0.12, 0.25], [x, 0.15, 0], dark);
+      break;
+    default: throw new Error(`Missing prototype model: ${name}`);
   }
 }
 type Product = [string, Shape];
@@ -214,7 +446,15 @@ zones.forEach((zone, zi) => {
     const entity = new pc.Entity(name);
     entity.setPosition(home);
     const model = new pc.Entity('product silhouette');
-    makeShape(model, shape, colours[tier]);
+    makeShape(model, name, colours[tier]);
+    let bottom = Infinity;
+    for (const child of model.children) {
+      if (child instanceof pc.Entity && child.render) {
+        for (const mesh of child.render.meshInstances) bottom = Math.min(bottom, mesh.aabb.getMin().y);
+      }
+    }
+    // Shallow objects sit on their collision base, rather than floating inside it.
+    model.setLocalPosition(0, -size[1] * (0.5 + bottom), 0);
     model.setLocalScale(...size);
     entity.addChild(model);
     entity.addComponent('collision', { type: 'box', halfExtents: new pc.Vec3(...size).mulScalar(0.5) });
@@ -259,7 +499,7 @@ function stretch(e: pc.Entity, a: pc.Vec3, b: pc.Vec3, width: number): void {
   e.setLocalPosition(new pc.Vec3().add2(a, b).mulScalar(0.5));
   e.setLocalScale(width, length, width);
   dir.normalize();
-  e.setLocalEulerAngles(Math.asin(dir.y) * pc.math.RAD_TO_DEG - 90, Math.atan2(dir.x, dir.z) * pc.math.RAD_TO_DEG, 0);
+  e.setLocalRotation(new pc.Quat().setFromDirections(pc.Vec3.UP, dir));
 }
 const forkPoint = (t: number) => new pc.Vec3(0.105 * Math.sin(t * Math.PI / 2), 0.075 - 0.07 * Math.cos(t * Math.PI / 2), 0);
 for (let i = 0; i < 8; i++) rod(sling, forkPoint(-1 + i / 4), forkPoint(-1 + (i + 1) / 4), 0.026, blue);
@@ -268,16 +508,22 @@ const tipR = new pc.Vec3(0.105, 0.185, 0);
 rod(sling, forkPoint(-1), tipL, 0.026, blue);
 rod(sling, forkPoint(1), tipR, 0.026, blue);
 rod(sling, new pc.Vec3(0, 0.005, 0), new pc.Vec3(0, -0.115, 0), 0.034, dark);
-const cup = visual(sling, 'sphere', [0.05, 0.05, 0.03], [0, 0.135, 0.08], leather);
-const bandL = rod(sling, tipL, new pc.Vec3(0, 0.135, 0.05), 0.017, dark);
-const bandR = rod(sling, tipR, new pc.Vec3(0, 0.135, 0.05), 0.017, dark);
+const POUCH_HEIGHT = tipL.y;
+const POUCH_HALF_WIDTH = 0.03;
+const BAND_WIDTH = 0.012;
+const cup = visual(sling, 'sphere', [0.065, 0.055, 0.025], [0, POUCH_HEIGHT, 0.08], leather);
+cup.name = 'sling-pouch';
+const bandL = rod(sling, tipL, new pc.Vec3(-POUCH_HALF_WIDTH, POUCH_HEIGHT, 0.08), BAND_WIDTH, dark);
+const bandR = rod(sling, tipR, new pc.Vec3(POUCH_HALF_WIDTH, POUCH_HEIGHT, 0.08), BAND_WIDTH, dark);
+bandL.name = 'band-left';
+bandR.name = 'band-right';
 let loadedModel: pc.Entity | null = null;
 function showLoaded(): void {
   loadedModel?.destroy();
   loadedModel = null;
   if (!loaded) return;
-  loadedModel = new pc.Entity('loaded product');
-  makeShape(loadedModel, loaded.shape, colours[loaded.tier]);
+  loadedModel = loaded.model.clone();
+  loadedModel.name = 'loaded product';
   const max = Math.max(...loaded.size);
   loadedModel.setLocalScale(loaded.size[0] / max * 0.12, loaded.size[1] / max * 0.12, loaded.size[2] / max * 0.12);
   sling.addChild(loadedModel);
@@ -611,10 +857,11 @@ app.on('update', (rawDt: number) => {
   stepOffset *= Math.exp(-dt / 0.12);
   camera.setLocalPosition(0, 0.75 + stepOffset - charge * 0.06, 0);
   camera.camera!.fov = 90 - 12 * charge;
-  const pouch = new pc.Vec3(-charge * 0.06, 0.135 - charge * 0.09, 0.05 + charge * 0.07);
-  cup.setLocalPosition(pouch.clone().add(new pc.Vec3(0, 0, 0.03)));
-  loadedModel?.setLocalPosition(pouch);
-  stretch(bandL, tipL, pouch, 0.017); stretch(bandR, tipR, pouch, 0.017);
+  const pouch = new pc.Vec3(-charge * 0.06, POUCH_HEIGHT, 0.08 + charge * 0.07);
+  cup.setLocalPosition(pouch);
+  loadedModel?.setLocalPosition(pouch.clone().add(new pc.Vec3(0, 0, -0.035)));
+  stretch(bandL, tipL, pouch.clone().add(new pc.Vec3(-POUCH_HALF_WIDTH, 0, 0)), BAND_WIDTH);
+  stretch(bandR, tipR, pouch.clone().add(new pc.Vec3(POUCH_HALF_WIDTH, 0, 0)), BAND_WIDTH);
   sling.setLocalPosition(0.26 - charge * 0.03, -0.24 - charge * 0.02, -0.55 + charge * 0.05);
   el('draw-meter').classList.toggle('on', drawing);
   el('draw-meter').classList.toggle('full', charge >= 1);
