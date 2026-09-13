@@ -285,6 +285,12 @@ body {
   font-weight: 700;
 }
 
+.pa-btn.is-armed {
+  background: #d2543f;
+  border-color: #d2543f;
+  color: #fff;
+}
+
 .pa-dump {
   position: fixed;
   bottom: 3.5rem;

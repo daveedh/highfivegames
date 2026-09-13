@@ -26,6 +26,8 @@ const tierLabel = { light: 'Light', medium: 'Medium', heavy: 'Heavy' };
 type Veto = { label: string; note: string };
 const VETO_KEY = 'skrapbo-veto';
 const vetoes: Record<string, Veto> = JSON.parse(localStorage.getItem(VETO_KEY) ?? '{}');
+/** Every row's repaint, so clearing can update the page without a reload. */
+const painters: (() => void)[] = [];
 const saveVetoes = (): void => {
   localStorage.setItem(VETO_KEY, JSON.stringify(vetoes));
   updateVetoBar();
@@ -87,6 +89,7 @@ function vetoControl(id: string, label: string, row: HTMLElement): HTMLElement {
   });
 
   paint();
+  painters.push(paint);
   wrap.append(btn, note);
   return wrap;
 }
@@ -300,12 +303,34 @@ copyBtn.addEventListener('click', async () => {
   window.setTimeout(() => (copyBtn.textContent = 'Copy the veto list'), 4_000);
 });
 
+/**
+ * Two-step rather than a confirm() dialog: dialogs are suppressed in some embedded
+ * browser panels, which silently ate the first version of this button. Repaints in place
+ * rather than reloading, for the same reason - never depend on the host allowing something.
+ */
 const clearBtn = el('button', 'pa-btn', 'Clear');
+let clearArmed = 0;
 clearBtn.addEventListener('click', () => {
-  if (!confirm('Clear every veto?')) return;
+  if (Date.now() > clearArmed) {
+    clearArmed = Date.now() + 4_000;
+    clearBtn.textContent = 'Click again to clear';
+    clearBtn.classList.add('is-armed');
+    window.setTimeout(() => {
+      if (clearArmed === 0) return;
+      clearArmed = 0;
+      clearBtn.textContent = 'Clear';
+      clearBtn.classList.remove('is-armed');
+    }, 4_000);
+    return;
+  }
   for (const key of Object.keys(vetoes)) delete vetoes[key];
   saveVetoes();
-  location.reload();
+  for (const paint of painters) paint();
+  clearArmed = 0;
+  clearBtn.textContent = 'Cleared';
+  clearBtn.classList.remove('is-armed');
+  dump.style.display = 'none';
+  window.setTimeout(() => (clearBtn.textContent = 'Clear'), 2_000);
 });
 
 const dump = el('textarea', 'pa-dump');
