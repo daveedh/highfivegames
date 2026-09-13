@@ -4,7 +4,9 @@
  * this question needs the existing PlayCanvas/Ammo feel-prototype environment.
  * Five slots, FIFO, tier damage, finite stock, and Pull and Hold are already settled.
  * Chosen live: B's grab/load rules, heavier/slower Heavy objects, message-only empty feedback.
- * Audio is deferred: neither Web Audio nor native reference playback was audible to the user.
+ * Audio was silent for a machine reason, not a code one: the default Windows output
+ * was a monitor with no speakers (#21). Playback works; the dry-fire click is voiced
+ * mid-band with a pitched body so small monitor speakers actually reproduce it.
  * Run: npm run prototype:ammo. Plain English item names requested for this playtest.
  */
 import * as pc from 'playcanvas';
@@ -586,25 +588,49 @@ async function dryFireClick(): Promise<boolean> {
   try {
     clickAudio ??= new AudioContext();
     if (!clickBuffer) {
-      clickBuffer = clickAudio.createBuffer(1, Math.ceil(clickAudio.sampleRate * 0.055), clickAudio.sampleRate);
+      clickBuffer = clickAudio.createBuffer(1, Math.ceil(clickAudio.sampleRate * 0.09), clickAudio.sampleRate);
       const samples = clickBuffer.getChannelData(0);
       for (let i = 0; i < samples.length; i++) samples[i] = Math.random() * 2 - 1;
     }
     await clickAudio.resume();
     if (clickAudio.state !== 'running') throw new Error(`Audio engine is ${clickAudio.state}`);
+    const start = clickAudio.currentTime;
+    const out = clickAudio.createGain();
+    out.gain.value = 0.9;
+    out.connect(clickAudio.destination);
+
     const source = clickAudio.createBufferSource();
     source.buffer = clickBuffer;
+    // Wide band centred where small monitor speakers are most efficient; a tight
+    // filter here throws away most of the burst's energy and the click vanishes.
     const filter = clickAudio.createBiquadFilter();
     filter.type = 'bandpass';
-    filter.frequency.value = 1500;
-    filter.Q.value = 1.8;
+    filter.frequency.value = 1800;
+    filter.Q.value = 0.7;
     const gain = clickAudio.createGain();
-    gain.gain.setValueAtTime(0.001, clickAudio.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.35, clickAudio.currentTime + 0.002);
-    gain.gain.exponentialRampToValueAtTime(0.001, clickAudio.currentTime + 0.05);
-    source.connect(filter).connect(gain).connect(clickAudio.destination);
-    source.onended = () => { source.disconnect(); filter.disconnect(); gain.disconnect(); };
-    source.start();
+    gain.gain.setValueAtTime(0.001, start);
+    gain.gain.exponentialRampToValueAtTime(1, start + 0.002);
+    gain.gain.exponentialRampToValueAtTime(0.001, start + 0.085);
+    source.connect(filter).connect(gain).connect(out);
+
+    // Pitched body under the noise, so the snap reads as a band release, not a tick.
+    const body = clickAudio.createOscillator();
+    body.type = 'triangle';
+    body.frequency.setValueAtTime(900, start);
+    body.frequency.exponentialRampToValueAtTime(320, start + 0.06);
+    const bodyGain = clickAudio.createGain();
+    bodyGain.gain.setValueAtTime(0.001, start);
+    bodyGain.gain.exponentialRampToValueAtTime(0.5, start + 0.004);
+    bodyGain.gain.exponentialRampToValueAtTime(0.001, start + 0.07);
+    body.connect(bodyGain).connect(out);
+
+    source.onended = () => {
+      source.disconnect(); filter.disconnect(); gain.disconnect();
+      body.disconnect(); bodyGain.disconnect(); out.disconnect();
+    };
+    source.start(start);
+    body.start(start);
+    body.stop(start + 0.09);
     return true;
   } catch (error) {
     console.error('Dry-fire audio unavailable', error);
@@ -705,7 +731,7 @@ ui.innerHTML = `
     <div id="grab-knobs"></div>
     <label>Empty-pouch feedback<select id="empty-mode"><option value="text">Message only</option><option value="shelves">Message + visible stock markers</option><option value="click">Dry-fire click</option><option value="click-message">Click + message</option></select></label>
     <details id="audio-diagnostics"><summary>Audio diagnostics (deferred)</summary>
-      <button id="test-click">Test click</button> <button id="test-tone">Test tone</button><p class="note" id="sound-status"></p>
+      <button id="test-click">Test click</button> <button id="test-tone">Test tone</button> <button id="test-wa-tone">Test Web Audio tone</button><p class="note" id="sound-status"></p>
       <audio id="reference-tone" controls style="width:100%" aria-label="Reference tone audio player"></audio>
     </details>
     <details><summary>Weight-tier physics</summary><div id="tier-knobs"></div></details>
@@ -783,6 +809,36 @@ el('test-click').onclick = async () => {
   el('sound-status').textContent = 'Starting audio...';
   const started = await dryFireClick();
   el('sound-status').textContent = started ? 'Click sent. Audio engine is running.' : 'Click not sent. Check the message above, then try again.';
+};
+// Discriminator: a loud, sustained tone down the SAME Web Audio path as the click.
+// If the native player's tone is audible and this one is not, the fault is Web Audio
+// output routing in this browser, not click synthesis or envelope shaping.
+el('test-wa-tone').onclick = async () => {
+  el('sound-status').textContent = 'Starting Web Audio tone...';
+  try {
+    clickAudio ??= new AudioContext();
+    await clickAudio.resume();
+    const start = clickAudio.currentTime;
+    const osc = clickAudio.createOscillator();
+    osc.type = 'sine';
+    osc.frequency.value = 660;
+    const gain = clickAudio.createGain();
+    gain.gain.setValueAtTime(0.0001, start);
+    gain.gain.exponentialRampToValueAtTime(0.4, start + 0.02);
+    gain.gain.setValueAtTime(0.4, start + 1.2);
+    gain.gain.exponentialRampToValueAtTime(0.0001, start + 1.4);
+    osc.connect(gain).connect(clickAudio.destination);
+    osc.onended = () => { osc.disconnect(); gain.disconnect(); };
+    osc.start(start);
+    osc.stop(start + 1.45);
+    const sink = (clickAudio as AudioContext & { sinkId?: unknown }).sinkId;
+    const sinkLabel = typeof sink === 'string' ? (sink === '' ? 'default' : sink) : 'unavailable';
+    el('sound-status').textContent =
+      `Web Audio tone sent for 1.4 s. state=${clickAudio.state}, sampleRate=${clickAudio.sampleRate}, sinkId=${sinkLabel}. ` +
+      `If the native Test tone is audible and this is not, Web Audio is routed to a different output.`;
+  } catch (error) {
+    el('sound-status').textContent = `Web Audio error: ${error instanceof Error ? error.message : String(error)}`;
+  }
 };
 const referenceTone = el('reference-tone');
 if (!(referenceTone instanceof HTMLAudioElement)) throw new Error('Missing reference audio player');
