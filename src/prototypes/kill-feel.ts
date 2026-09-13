@@ -1,7 +1,8 @@
 /**
  * THROWAWAY: does killing a guard feel like a moment? Three feedback chains on
  * ?variant=A|B|C reuse the settled ammo prototype, not its stationary dummy falls.
- * Wreckage stays movable (chosen live); all other feedback is still a candidate.
+ * Chosen live: C at its defaults, all six visual effects, synthesized sound,
+ * movable wreckage, and empty-pouch click + message. Keep controls for later tuning.
  * npm run prototype:kill. Deliberately excluded from the production entry.
  */
 import * as pc from 'playcanvas';
@@ -18,8 +19,9 @@ const presets = [
     description: 'An arcing power fault locks the joints, flickers, then drops a dead machine.' }
 ];
 const params = new URLSearchParams(location.search);
-let index = Math.max(0, presets.findIndex(p => p.key === (params.get('variant') ?? 'A').toUpperCase()));
+let index = Math.max(0, presets.findIndex(p => p.key === (params.get('variant') ?? 'C').toUpperCase()));
 const tuning = { ...presets[index], volume: 0.55, stagger: 0.22 };
+cfg.empty = 'click-message';
 const feedback = { hitmarker: true, targetFlash: true, screenShake: true,
   hitStop: true, debris: true, tracer: true, sound: true };
 let hunt = false;
@@ -399,10 +401,10 @@ el('readout').innerHTML = `<h1>THROWAWAY: make the kill land</h1><div id="state"
   Compare A / B / C. Esc opens the six feedback switches. Reset restores the same test.</p>
   <p class="instructions dim">Wreckage stays movable: walk into it to kick it. Stand-still targets first;
   enable hunting when ready. This is not the final showroom.</p>`;
-el('panel').innerHTML = `<h2>Kill feedback candidates</h2><p id="kill-blurb"></p>
+el('panel').innerHTML = `<h2>Chosen: C / controls kept for tuning</h2><p id="kill-blurb"></p>
   <div id="kill-toggles"></div><div id="kill-knobs"></div>
   <label><input id="hunt" type="checkbox"> Guards hunt (three hearts)</label>
-  <h2>Sound effects</h2><p id="kill-audio">Candidate source: synthesized. No voice, joke sting, or victory jingle.</p>
+  <h2>Sound effects</h2><p id="kill-audio">Chosen source: synthesized. No voice, joke sting, or victory jingle.</p>
   <button id="audition-hit">Hear impact</button> <button id="audition-death">Hear failure</button>
   <button id="audition-floor">Hear floor impact</button>
   <label>Empty pouch<select id="empty-mode"><option value="text">Message only</option>
@@ -418,7 +420,8 @@ el('click-to-play').innerHTML = `<div><h1>Make the kill land.</h1><p>Click the s
   <p>WASD / Shift / Space<br>E grab / hold left mouse, release to fire<br>Right mouse cancels / Esc tunes</p>
   <p>Start at the yellow shelf, grab a Light and a Heavy, then face the three guards in the centre aisle.</p>
   <p>A: stagger and collapse<br>B: armour coming apart<br>C: electrical failure</p>
-  <p class="dim">Arrows compare. Switching resets the playtest. None is a winner yet.</p></div>`;
+  <p class="dim">Chosen: C at its defaults. Arrows keep A/B available for later comparison.
+  Switching resets the playtest.</p></div>`;
 const labels: Record<keyof typeof feedback, string> = {
   hitmarker: 'Hitmarker', targetFlash: 'Target flash', screenShake: 'Screen shake',
   hitStop: 'Hit stop (45 / 75 ms)', debris: 'Lasting debris', tracer: 'Shot tracer', sound: 'Sound effects'
