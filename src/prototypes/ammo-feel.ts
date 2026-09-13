@@ -105,11 +105,16 @@ function box(name: string, pos: number[], size: number[], m = grey): pc.Entity {
   app.root.addChild(e);
   return e;
 }
-box('floor', [0, -0.5, 0], [30, 1, 48], floorMat);
-box('back', [0, 3, -24], [30, 6, 0.4]);
-box('front', [0, 3, 24], [30, 6, 0.4]);
-box('left', [-15, 3, 0], [0.4, 6, 48]);
-box('right', [15, 3, 0], [0.4, 6, 48]);
+const showroom = {
+  width: killPrototype ? 36 : 30,
+  depth: killPrototype ? 60 : 48,
+  spawn: new pc.Vec3(-10, 0.9, killPrototype ? 25 : 19)
+};
+box('floor', [0, -0.5, 0], [showroom.width, 1, showroom.depth], floorMat);
+box('back', [0, 3, -showroom.depth / 2], [showroom.width, 6, 0.4]);
+box('front', [0, 3, showroom.depth / 2], [showroom.width, 6, 0.4]);
+box('left', [-showroom.width / 2, 3, 0], [0.4, 6, showroom.depth]);
+box('right', [showroom.width / 2, 3, 0], [0.4, 6, showroom.depth]);
 box('bank shot wall', [7, 1.5, -12], [0.3, 3, 7]);
 box('low cover', [-1, 0.5, -5], [3, 1, 0.5]);
 
@@ -122,7 +127,7 @@ player.addComponent('collision', { type: 'capsule', radius: 0.35, height: 1.7 })
 player.addComponent('rigidbody', { type: 'dynamic', mass: 80, angularFactor: pc.Vec3.ZERO, friction: 0.5 });
 player.addComponent('script');
 app.root.addChild(player);
-player.rigidbody!.teleport(-10, 0.9, 19);
+player.rigidbody!.teleport(showroom.spawn);
 const controller = player.script!.create(FirstPersonController, {
   properties: { camera, lookSens: 0.1, speedGround: 45, speedAir: 5, sprintMult: 1.6,
     velocityDampingGround: 0.995, velocityDampingAir: 0.99925, jumpForce: 550 }
@@ -438,7 +443,7 @@ function configureBody(item: Item): void {
 }
 zones.forEach((zone, zi) => {
   const x = zi < 3 ? -10 : 10;
-  const z = 16 - (zi % 3) * 14;
+  const z = killPrototype && zi === 0 ? 23.2 : 16 - (zi % 3) * 14;
   const rows = zone.products.length > 6 ? 2 : 1;
   for (let row = 0; row < rows; row++) {
     const height = row === 0 ? 0.9 : 1.6;
@@ -735,7 +740,7 @@ function reset(): void {
     target.entity.collision!.enabled = true;
     target.entity.rigidbody!.teleport(target.home, pc.Quat.IDENTITY);
   }
-  player.rigidbody!.teleport(-10, 0.9, 19);
+  player.rigidbody!.teleport(showroom.spawn);
   player.rigidbody!.linearVelocity = pc.Vec3.ZERO;
   say('Playtest reset: original 40 objects returned. Not an in-game restock.');
   app.fire('prototype:reset');
@@ -1086,5 +1091,5 @@ app.on('update', (rawDt: number) => {
 hud();
 // Inspection surface for browser diagnostics; no separate simulation or fake inventory.
 export { app, player, camera, items, queue, targets, cfg, tiers, grab, fire, loadNext, reset, findFocus,
-  visual, material, say, slider, el, cancelDraw, upgrades, interaction, box, ray };
+  visual, material, say, slider, el, cancelDraw, upgrades, interaction, box, ray, showroom };
 export type { Item };

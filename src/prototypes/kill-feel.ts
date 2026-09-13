@@ -22,6 +22,7 @@ const presets = [
 const params = new URLSearchParams(location.search);
 let index = Math.max(0, presets.findIndex(p => p.key === (params.get('variant') ?? 'C').toUpperCase()));
 const tuning = { ...presets[index], volume: 0.55, stagger: 0.22 };
+const guardTuning = { patrolSpeed: 2.2, chaseSpeed: 4.8, searchSpeed: 3, sightRange: 12, halfCone: 40 };
 cfg.empty = 'click-message';
 const feedback = { hitmarker: true, targetFlash: true, screenShake: true,
   hitStop: true, debris: true, tracer: true, sound: true };
@@ -366,9 +367,9 @@ function tickGuard(g: Guard, dt: number): void {
   const toPlayer = player.getPosition().clone().sub(eye);
   const distance = Math.hypot(toPlayer.x, toPlayer.z);
   const desiredYaw = Math.atan2(-toPlayer.x, -toPlayer.z) * pc.math.RAD_TO_DEG;
-  const inCone = Math.abs(((desiredYaw - g.yaw + 540) % 360) - 180) <= 65;
+  const inCone = Math.abs(((desiredYaw - g.yaw + 540) % 360) - 180) <= guardTuning.halfCone;
   const hit = obstruction(g, eye, camera.getPosition());
-  const visible = distance < 22 && inCone && (!hit || hit.entity === player);
+  const visible = distance < guardTuning.sightRange && inCone && (!hit || hit.entity === player);
   if (visible) {
     g.seeing += dt;
     g.unseen = 0;
@@ -381,7 +382,7 @@ function tickGuard(g: Guard, dt: number): void {
     if (g.state === 'chase' && g.unseen > 5) { g.state = 'search'; g.search = 10; }
   }
   if (g.state === 'chase') {
-    move(g, g.lastKnown, 7, dt, 1.25);
+    move(g, g.lastKnown, guardTuning.chaseSpeed, dt, 1.25);
     if (distance < 1.7 && visible && hurtLeft === 0) {
       hearts--;
       hurtLeft = 0.9;
@@ -392,14 +393,14 @@ function tickGuard(g: Guard, dt: number): void {
     }
   } else if (g.state === 'search') {
     g.search -= dt;
-    if (move(g, g.lastKnown, 4.2, dt) < 1) {
+    if (move(g, g.lastKnown, guardTuning.searchSpeed, dt) < 1) {
       g.yaw += 140 * dt;
       g.entity.setEulerAngles(0, g.yaw, 0);
     }
     if (g.search <= 0) g.state = 'patrol';
   } else if (g.state === 'patrol') {
     const route = patrols[guards.indexOf(g)];
-    if (move(g, route[g.waypoint], 3, dt) < 0.5) g.waypoint = (g.waypoint + 1) % route.length;
+    if (move(g, route[g.waypoint], guardTuning.patrolSpeed, dt) < 0.5) g.waypoint = (g.waypoint + 1) % route.length;
   }
   for (const p of g.parts) {
     if (p.entity.name === 'leg' || p.entity.name === 'arm') {
@@ -417,6 +418,7 @@ el('readout').innerHTML = `<h1>THROWAWAY: make the kill land</h1><div id="state"
 el('panel').innerHTML = `<h2>Chosen: C / controls kept for tuning</h2><p id="kill-blurb"></p>
   <div id="kill-toggles"></div><div id="kill-knobs"></div>
   <label><input id="hunt" type="checkbox" checked> Guards hunt (three hearts)</label>
+  <details><summary>Guard difficulty</summary><div id="guard-knobs"></div></details>
   <h2>Sound effects</h2><p id="kill-audio">Chosen source: synthesized. No voice, joke sting, or victory jingle.</p>
   <button id="audition-hit">Hear impact</button> <button id="audition-death">Hear failure</button>
   <button id="audition-floor">Hear floor impact</button>
@@ -433,6 +435,7 @@ el('click-to-play').innerHTML = `<div><h1>Make the kill land.</h1><p>Click the s
   <p>WASD / Shift / Space<br>E grab / hold left mouse, release to fire<br>Right mouse cancels / Esc tunes</p>
   <p>E grabs stock or an upgrade box. Both hands are full until you place the box in its self-checkout.
   Stay nearby for three seconds. Interrupted processing resumes when you return.</p>
+  <p>The shelf directly ahead has your starting throwables. Grab some before entering the patrol routes.</p>
   <p>The Band: Bedrooms, on the roamer's route. Bigger Pouch: Children's, on a zoned guard's loop.</p>
   <p>A: stagger and collapse<br>B: armour coming apart<br>C: electrical failure</p>
   <p class="dim">Chosen: C at its defaults. Arrows keep A/B available for later comparison.
@@ -477,6 +480,12 @@ function refresh(): void {
   slider(el('kill-knobs'), 'Movable pieces per kill', tuning.chunks, 0, 8, 1, v => { tuning.chunks = v; });
   slider(el('kill-knobs'), 'Nonlethal stagger (seconds)', tuning.stagger, 0.05, 0.45, 0.01, v => { tuning.stagger = v; });
   slider(el('kill-knobs'), 'Effects volume', tuning.volume, 0, 1, 0.05, v => { tuning.volume = v; });
+  el('guard-knobs').replaceChildren();
+  slider(el('guard-knobs'), 'Patrol speed (m/s)', guardTuning.patrolSpeed, 1, 4, 0.1, v => { guardTuning.patrolSpeed = v; });
+  slider(el('guard-knobs'), 'Chase speed (m/s)', guardTuning.chaseSpeed, 2, 8, 0.1, v => { guardTuning.chaseSpeed = v; });
+  slider(el('guard-knobs'), 'Search speed (m/s)', guardTuning.searchSpeed, 1, 5, 0.1, v => { guardTuning.searchSpeed = v; });
+  slider(el('guard-knobs'), 'Sight range (metres)', guardTuning.sightRange, 5, 25, 1, v => { guardTuning.sightRange = v; });
+  slider(el('guard-knobs'), 'Vision cone (degrees)', guardTuning.halfCone * 2, 40, 160, 5, v => { guardTuning.halfCone = v / 2; });
   const empty = el('empty-mode');
   if (empty instanceof HTMLSelectElement) {
     empty.value = cfg.empty;
@@ -500,7 +509,7 @@ el('audition-death').onclick = () => { void sound('failure'); };
 el('audition-floor').onclick = () => { void sound('floor'); };
 el('reset').onclick = reset;
 const settings = () => ({ question: 'Does killing a guard feel like a moment?', candidate: tuning,
-  feedback, hunt, empty: cfg.empty, wreckage: 'movable parts and corpses',
+  feedback, hunt, guards: guardTuning, empty: cfg.empty, wreckage: 'movable parts and corpses',
   budget: { fragments: MAX_FRAGMENTS, corpses: 3, activeThrowables: 12, player: 1, total: 40 } });
 el('copy-kill').onclick = async () => {
   const text = JSON.stringify(settings(), null, 2);
@@ -560,6 +569,7 @@ app.on('update', (rawDt: number) => {
       items.filter(i => i.entity.enabled && i.entity.rigidbody!.type === 'dynamic').length;
     el('kill-state').textContent = `${tuning.key}: ${guards.map(g => `${g.hp}/4 ${g.state}`).join(' | ')}
 ${hunt ? `Hearts ${hearts}/3` : 'Hunting OFF'} | dynamic bodies ${dynamic}/40
+Sight ${guardTuning.sightRange} m / ${guardTuning.halfCone * 2} degrees | chase ${guardTuning.chaseSpeed.toFixed(1)} m/s
 Movable pieces ${fragments.length}/${MAX_FRAGMENTS} | ${guards.filter(g => g.state === 'down').length}/3 down`;
   }
 });

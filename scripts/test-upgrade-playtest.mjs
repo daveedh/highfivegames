@@ -65,6 +65,23 @@ async function collect(page, tier, index = 0) {
   await page.keyboard.press('KeyE');
 }
 
+test('the larger showroom starts beside throwables without an immediate chase', async () => {
+  await scene(async page => {
+    const opening = await page.evaluate(() => ({
+      width: ammo.showroom.width, depth: ammo.showroom.depth,
+      nearest: Math.min(...ammo.items.map(item => ammo.camera.getPosition().distance(item.entity.getPosition()))),
+      guards: combat.settings().guards
+    }));
+    assert.equal(opening.width, 36);
+    assert.equal(opening.depth, 60);
+    assert.ok(opening.nearest < 2.1, JSON.stringify(opening));
+    assert.deepEqual(opening.guards, { patrolSpeed: 2.2, chaseSpeed: 4.8, searchSpeed: 3, sightRange: 12, halfCone: 40 });
+    await page.waitForTimeout(5000);
+    assert.deepEqual(await page.evaluate(() => combat.guards.map(guard => guard.state)), ['patrol', 'patrol', 'patrol']);
+    assert.match(await page.locator('#kill-state').innerText(), /Hearts 3\/3/);
+  }, true);
+});
+
 test('carrying, pause/resume, receipts, eight slots, and reset use the real scene', async () => {
   await scene(async page => {
     await collect(page, 'light');
@@ -170,8 +187,12 @@ test('three hits end all interaction and provide a working restart', async () =>
 
 test('three chasing guards cannot squeeze the player through any wall or a corner', async () => {
   await scene(async page => {
-    for (const [x, z, dx, dz] of [[14.4, 20, 1, 0], [-14.4, 20, -1, 0],
-      [0, 23.4, 0, 1], [0, -23.4, 0, -1], [14.4, 23.4, 1, 1]]) {
+    const { halfWidth, halfDepth } = await page.evaluate(() => ({
+      halfWidth: ammo.showroom.width / 2, halfDepth: ammo.showroom.depth / 2
+    }));
+    const edgeX = halfWidth - 0.6, edgeZ = halfDepth - 0.6;
+    for (const [x, z, dx, dz] of [[edgeX, 20, 1, 0], [-edgeX, 20, -1, 0],
+      [0, edgeZ, 0, 1], [0, -edgeZ, 0, -1], [edgeX, edgeZ, 1, 1]]) {
       await page.evaluate(([x, z, dx, dz]) => {
         ammo.reset();
         ammo.player.rigidbody.teleport(x, 0.9, z);
@@ -194,7 +215,7 @@ test('three chasing guards cannot squeeze the player through any wall or a corne
       if (!await page.evaluate(() => !!document.pointerLockElement)) await page.mouse.click(700, 450);
       await page.waitForTimeout(2500);
       const bounds = await page.evaluate(() => extent);
-      assert.ok(bounds.maxX < 15 && bounds.maxZ < 24 && bounds.minY > 0.3, JSON.stringify(bounds));
+      assert.ok(bounds.maxX < halfWidth && bounds.maxZ < halfDepth && bounds.minY > 0.3, JSON.stringify(bounds));
     }
   }, true);
 });

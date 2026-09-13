@@ -6,6 +6,10 @@ settled combat playtest; the production showroom snake remains separate work.
 Guards hunt by default. The middle guard roams between the six shelf zones.
 The other guards patrol Living Rooms and Children's. Turn hunting off in the
 tuning panel to inspect the upgrades without pressure.
+The combat playtest is 36 by 60 metres, with the Living Rooms shelf immediately
+in front of spawn. Guards patrol at 2.2 m/s, chase at 4.8 m/s, and search at
+3 m/s. Their sight reaches 12 metres through an 80-degree cone. The
+**Guard difficulty** section in the tuning panel exposes all five values.
 Guards stop short of the player to attack: their kinematic collision bodies
 must not overlap the player and squeeze it through the showroom walls.
 
