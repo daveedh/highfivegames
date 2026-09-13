@@ -19,6 +19,18 @@ import './pa-feel.css';
 const zoneOrder: ZoneId[] = ['living', 'dining', 'bedrooms', 'kitchens', 'childrens', 'market'];
 const tierLabel = { light: 'Light', medium: 'Medium', heavy: 'Heavy' };
 
+/**
+ * The veto list. Two boys going through eighty-eight pieces of copy will not remember which
+ * ones they hated, so the page remembers for them and exports a list to paste back.
+ */
+type Veto = { label: string; note: string };
+const VETO_KEY = 'skrapbo-veto';
+const vetoes: Record<string, Veto> = JSON.parse(localStorage.getItem(VETO_KEY) ?? '{}');
+const saveVetoes = (): void => {
+  localStorage.setItem(VETO_KEY, JSON.stringify(vetoes));
+  updateVetoBar();
+};
+
 /** Settled in #17: a line every 25-40s. Fast mode exists only so a playtest is not 40 minutes. */
 const cadence = { minMs: 25_000, maxMs: 40_000 };
 const fastCadence = { minMs: 4_000, maxMs: 7_000 };
@@ -41,6 +53,43 @@ const caption = el('div', 'pa-caption');
 const captionText = el('span', 'pa-caption-text');
 caption.append(el('span', 'pa-caption-icon', '\u25B6'), captionText);
 document.body.append(caption);
+
+/**
+ * One veto control per piece of copy. Clicking crosses the row out and opens a note field,
+ * because "this one is rubbish" is far more useful with two words of why attached.
+ */
+function vetoControl(id: string, label: string, row: HTMLElement): HTMLElement {
+  const wrap = el('span', 'pa-veto-wrap');
+  const btn = el('button', 'pa-veto', '\u2717');
+  btn.title = 'Veto this one';
+  const note = el('input', 'pa-veto-note');
+  note.placeholder = 'why? (optional)';
+  note.addEventListener('input', () => {
+    if (vetoes[id]) {
+      vetoes[id].note = note.value;
+      saveVetoes();
+    }
+  });
+
+  const paint = (): void => {
+    const vetoed = Boolean(vetoes[id]);
+    row.classList.toggle('is-vetoed', vetoed);
+    btn.classList.toggle('is-vetoed', vetoed);
+    note.style.display = vetoed ? '' : 'none';
+    note.value = vetoes[id]?.note ?? '';
+  };
+
+  btn.addEventListener('click', () => {
+    if (vetoes[id]) delete vetoes[id];
+    else vetoes[id] = { label, note: '' };
+    saveVetoes();
+    paint();
+  });
+
+  paint();
+  wrap.append(btn, note);
+  return wrap;
+}
 
 /** One line at a time, always. A PA that talks over itself stops sounding like a PA. */
 function play(id: string, text: string, url: string): void {
@@ -163,6 +212,7 @@ for (const zone of [...zoneOrder, 'generic' as const]) {
     const btn = el('button', 'pa-btn pa-btn-play', '\u25B6');
     btn.addEventListener('click', () => play(line.id, line.text, paAudioUrl(line.id)));
     row.append(btn, el('span', `pa-tag ${line.loaded ? 'is-loaded' : ''}`, line.loaded ? 'loaded' : 'plain'), el('span', 'pa-line-text', line.text));
+    row.append(vetoControl(`line:${line.id}`, line.text, row));
     group.append(row);
   }
   linesSection.append(group);
@@ -176,10 +226,12 @@ for (const zone of zoneOrder) {
   const sign = zoneSigns[zone];
   const heading = el('h3', '', sign.name);
   heading.append(el('span', 'pa-next', ` \u2192 ${sign.next}`));
+  heading.append(vetoControl(`sign:${zone}`, `${sign.name} sign${sign.subtitle ? ` / ${sign.subtitle}` : ''}`, heading));
   group.append(heading);
   if (sign.subtitle) group.append(el('p', 'pa-subtitle', sign.subtitle));
   for (const p of products.filter((x) => x.zone === zone)) {
     const card = el('div', 'pa-card');
+    card.append(vetoControl(`product:${p.id}`, `${p.name} - ${p.descriptor}`, card));
     card.append(el('span', 'pa-card-name', p.name));
     card.append(el('span', 'pa-card-price', p.price.toFixed(2)));
     card.append(el('span', `pa-card-tier is-${p.tier}`, tierLabel[p.tier]));
@@ -203,9 +255,91 @@ for (const receipt of Object.values(receipts)) {
   total.append(el('span', '', receiptFooter[0]), el('span', '', receiptFooter[1]));
   slip.append(total);
   for (const foot of receiptFooter.slice(2)) slip.append(el('div', 'pa-receipt-desc', foot));
-  receiptSection.append(slip);
+  const slipWrap = el('div', 'pa-receipt-wrap');
+  slipWrap.append(slip, vetoControl(`receipt:${receipt.upgradeId}`, `${receipt.item} - ${receipt.explanation}`, slipWrap));
+  receiptSection.append(slipWrap);
 }
 
 panel.append(el('h1', '', 'FLATP\u00c4K SKR\u00c4PBO \u2014 the store\u2019s voice'));
 panel.append(controls, zoneRow, audition, linesSection, productSection, receiptSection);
 document.body.append(panel);
+
+// ---- the veto bar ---------------------------------------------------------
+
+const VOICE_KEY = 'skrapbo-voice';
+let chosenVoice = localStorage.getItem(VOICE_KEY) ?? 'undecided';
+
+const vetoBar = el('div', 'pa-veto-bar');
+const vetoCount = el('span', 'pa-veto-count');
+const voicePick = el('span', 'pa-voice-pick');
+voicePick.append(el('span', 'pa-label', 'Voice:'));
+for (const [key, label] of [['alba', 'A - alba'], ['jenny_dioco', 'B - jenny']] as const) {
+  const btn = el('button', `pa-btn pa-btn-small${chosenVoice === key ? ' is-chosen' : ''}`, label);
+  btn.addEventListener('click', () => {
+    chosenVoice = key;
+    localStorage.setItem(VOICE_KEY, key);
+    voicePick.querySelectorAll('button').forEach((b) => b.classList.remove('is-chosen'));
+    btn.classList.add('is-chosen');
+  });
+  voicePick.append(btn);
+}
+
+const copyBtn = el('button', 'pa-btn pa-btn-primary', 'Copy the veto list');
+copyBtn.addEventListener('click', async () => {
+  const text = exportVetoes();
+  try {
+    await navigator.clipboard.writeText(text);
+    copyBtn.textContent = 'Copied - paste it to me';
+  } catch {
+    // Clipboard can be blocked; showing the text is always available as a fallback.
+    dump.value = text;
+    dump.style.display = '';
+    dump.select();
+    copyBtn.textContent = 'Select it all and copy';
+  }
+  window.setTimeout(() => (copyBtn.textContent = 'Copy the veto list'), 4_000);
+});
+
+const clearBtn = el('button', 'pa-btn', 'Clear');
+clearBtn.addEventListener('click', () => {
+  if (!confirm('Clear every veto?')) return;
+  for (const key of Object.keys(vetoes)) delete vetoes[key];
+  saveVetoes();
+  location.reload();
+});
+
+const dump = el('textarea', 'pa-dump');
+dump.style.display = 'none';
+dump.rows = 8;
+
+vetoBar.append(vetoCount, voicePick, copyBtn, clearBtn);
+document.body.append(vetoBar, dump);
+
+function exportVetoes(): string {
+  const groups: Record<string, string> = {
+    line: 'PA lines',
+    product: 'Shelf cards',
+    sign: 'Zone signs',
+    receipt: 'Receipts'
+  };
+  const out = [`VETO LIST - Flatpak Skrapbo copy`, ``, `Voice: ${chosenVoice}`, ``];
+  for (const [prefix, heading] of Object.entries(groups)) {
+    const hits = Object.entries(vetoes).filter(([key]) => key.startsWith(`${prefix}:`));
+    if (!hits.length) continue;
+    out.push(`${heading} (${hits.length}):`);
+    for (const [key, veto] of hits) {
+      const id = key.slice(prefix.length + 1);
+      out.push(`- ${id}: "${veto.label}"${veto.note ? ` -- ${veto.note}` : ''}`);
+    }
+    out.push('');
+  }
+  if (out.length === 4) out.push('Nothing vetoed. It is all fine, apparently.');
+  return out.join('\n');
+}
+
+function updateVetoBar(): void {
+  const n = Object.keys(vetoes).length;
+  vetoCount.textContent = n === 0 ? 'Nothing vetoed yet' : `${n} vetoed`;
+}
+
+updateVetoBar();

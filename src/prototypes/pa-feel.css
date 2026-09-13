@@ -195,12 +195,114 @@ body {
 
 .pa-card {
   display: grid;
-  grid-template-columns: 9rem 4rem 5rem 1fr;
+  grid-template-columns: auto 9rem 4rem 5rem 1fr;
   gap: 0.6rem;
   align-items: baseline;
   padding: 0.3rem 0;
   border-bottom: 1px solid #35373e;
   font-size: 0.88rem;
+}
+
+/* ---- veto ---------------------------------------------------------------- */
+
+.pa-veto-wrap {
+  display: inline-flex;
+  gap: 0.4rem;
+  align-items: center;
+  margin-left: auto;
+}
+
+.pa-veto {
+  background: transparent;
+  border: 1px solid #55585f;
+  border-radius: 3px;
+  color: #7c7f88;
+  cursor: pointer;
+  font-size: 0.7rem;
+  line-height: 1;
+  padding: 0.25rem 0.45rem;
+}
+
+.pa-veto:hover {
+  border-color: #d2543f;
+  color: #d2543f;
+}
+
+.pa-veto.is-vetoed {
+  background: #d2543f;
+  border-color: #d2543f;
+  color: #fff;
+}
+
+.pa-veto-note {
+  width: 9rem;
+  background: #23252b;
+  border: 1px solid #55585f;
+  border-radius: 3px;
+  color: #e8e8ea;
+  font-size: 0.75rem;
+  padding: 0.2rem 0.4rem;
+}
+
+.is-vetoed .pa-line-text,
+.is-vetoed .pa-card-name,
+.is-vetoed .pa-card-desc {
+  text-decoration: line-through;
+  opacity: 0.45;
+}
+
+.pa-veto-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 20;
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  padding: 0.7rem 1.25rem;
+  background: #1b1d22;
+  border-top: 1px solid #44464e;
+}
+
+.pa-veto-count {
+  font-size: 0.85rem;
+  color: var(--skrapbo-yellow);
+  min-width: 9rem;
+}
+
+.pa-voice-pick {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+  margin-right: auto;
+}
+
+.pa-btn.is-chosen {
+  background: var(--skrapbo-yellow);
+  border-color: var(--skrapbo-yellow);
+  color: #1a1c22;
+  font-weight: 700;
+}
+
+.pa-dump {
+  position: fixed;
+  bottom: 3.5rem;
+  left: 1.25rem;
+  right: 1.25rem;
+  z-index: 20;
+  background: #12141a;
+  color: #e8e8ea;
+  border: 1px solid #55585f;
+  font-family: 'Consolas', ui-monospace, monospace;
+  font-size: 0.8rem;
+  padding: 0.6rem;
+}
+
+.pa-receipt-wrap {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
 }
 
 .pa-card-name {
