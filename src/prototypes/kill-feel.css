@@ -1,0 +1,17 @@
+/* Throwaway feedback comparison, layered onto the settled ammo prototype. */
+#kill-marker {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  font-size: 34px; color: #fff; opacity: 0; font-weight: bold;
+}
+#kill-marker.kill { color: #ffcf52; font-size: 42px; }
+#kill-state { color: #ffd45e; white-space: pre-line; margin-top: 8px; }
+#kill-toggles label { display: block; margin: 8px 0; }
+#kill-toggles input { width: auto; margin-right: 9px; }
+#kill-audio { font-size: 12px; color: #b6c8df; }
+#kill-settings { font-size: 10px; white-space: pre-wrap; overflow-wrap: anywhere; }
+#panel button { margin: 4px 0; }
+body[data-prototype="kill"] #panel { width: 295px; }
+body[data-prototype="kill"] #readout { max-width: 260px; }
+body[data-prototype="kill"] #ammo-message { top: 20px; max-width: 45%; text-align: center; }
+body[data-prototype="kill"] #click-to-play > div { max-width: 410px; }
+body[data-prototype="kill"].playing #readout { opacity: 0.85; }

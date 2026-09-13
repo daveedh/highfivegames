@@ -33,7 +33,8 @@ const variants = [
     blurb: 'Forgiving E pickup. Press R to load the next item before each shot. No refill button.' }
 ];
 const params = new URLSearchParams(location.search);
-let variantIndex = Math.max(0, variants.findIndex(v => v.key === (params.get('variant') ?? 'B').toUpperCase()));
+const killPrototype = document.body.dataset.prototype === 'kill';
+let variantIndex = Math.max(0, variants.findIndex(v => v.key === (killPrototype ? 'B' : (params.get('variant') ?? 'B').toUpperCase())));
 const cfg = { ...variants[variantIndex] };
 
 pc.WasmModule.setConfig('Ammo', {
@@ -461,7 +462,7 @@ zones.forEach((zone, zi) => {
     model.setLocalScale(...size);
     entity.addChild(model);
     entity.addComponent('collision', { type: 'box', halfExtents: new pc.Vec3(...size).mulScalar(0.5) });
-    entity.addComponent('rigidbody', { type: 'dynamic', mass: tiers[tier].mass, friction: 0.7,
+    entity.addComponent('rigidbody', { type: killPrototype ? 'static' : 'dynamic', mass: tiers[tier].mass, friction: 0.7,
       restitution: tiers[tier].bounce, linearDamping: 0.08, angularDamping: 0.2 });
     app.root.addChild(entity);
     const item: Item = { entity, model, name, shape, tier, size, home, state: 'world', armed: false, quiet: 0, struck: new Set() };
@@ -472,13 +473,14 @@ zones.forEach((zone, zi) => {
   });
 });
 
-const targets = [-4, 0, 4].map((x, i) => {
+const targets = (killPrototype ? [] : [-4, 0, 4]).map((x, i) => {
   const entity = box(`security dummy ${i + 1}`, [x, 1.2, -19], [0.8, 2.4, 0.55], blue);
   visual(entity, 'box', [0.65, 0.15, 0.1], [0, 0.7, 0.32], yellow);
   return { entity, hp: 4, fall: 0, shove: 0, home: entity.getPosition().clone() };
 });
 function hit(item: Item, other: pc.Entity): void {
   if (!item.armed || item.state !== 'world' || item.struck.has(other)) return;
+  if (killPrototype) { app.fire('prototype:hit', item, other); return; }
   const target = targets.find(t => t.entity === other && t.hp > 0);
   if (!target) return;
   item.struck.add(other);
@@ -667,6 +669,11 @@ function fire(): void {
     say('Too close to the shelf or wall. Step back to fire.');
     return;
   }
+  // The kill comparison reserves 24 loose parts + three corpses + the player.
+  if (killPrototype && items.filter(i => i.entity.enabled && i.entity.rigidbody!.type === 'dynamic').length >= 12) {
+    say('Physics budget full. Let a throwable settle before firing.');
+    return;
+  }
   queue.shift();
   loaded = null;
   showLoaded();
@@ -675,6 +682,7 @@ function fire(): void {
   item.quiet = 0;
   item.struck.clear();
   item.entity.enabled = true;
+  if (killPrototype) item.entity.rigidbody!.type = 'dynamic';
   configureBody(item);
   item.entity.rigidbody!.teleport(muzzle, pc.Quat.IDENTITY);
   item.entity.rigidbody!.linearVelocity = pc.Vec3.ZERO;
@@ -684,6 +692,7 @@ function fire(): void {
   cooldown = 0.35;
   fired++;
   say(`${item.name} fired at ${lastSpeed.toFixed(1)} m/s`);
+  app.fire('prototype:fired', item);
 }
 function cancelDraw(): void { drawing = false; drawTime = 0; }
 function reset(): void {
@@ -698,6 +707,7 @@ function reset(): void {
   for (const item of items) {
     item.state = 'world'; item.armed = false; item.quiet = 0; item.struck.clear();
     item.entity.enabled = true;
+    if (killPrototype) item.entity.rigidbody!.type = 'static';
     configureBody(item);
     item.entity.rigidbody!.teleport(item.home, pc.Quat.IDENTITY);
     item.entity.rigidbody!.linearVelocity = pc.Vec3.ZERO;
@@ -713,6 +723,7 @@ function reset(): void {
   player.rigidbody!.teleport(-10, 0.9, 19);
   player.rigidbody!.linearVelocity = pc.Vec3.ZERO;
   say('Playtest reset: original 40 objects returned. Not an in-game restock.');
+  app.fire('prototype:reset');
 }
 
 const ui = document.createElement('div');
@@ -798,6 +809,7 @@ function panel(): void {
   }
 }
 function switchVariant(delta: number): void {
+  if (killPrototype) { app.fire('prototype:variant', delta); return; }
   variantIndex = (variantIndex + delta + variants.length) % variants.length;
   Object.assign(cfg, variants[variantIndex]);
   cancelDraw();
@@ -1022,9 +1034,13 @@ app.on('update', (rawDt: number) => {
     if (item.state !== 'world' || !item.armed) continue;
     const body = item.entity.rigidbody!;
     item.quiet = body.linearVelocity.length() < 0.2 && body.angularVelocity.length() < 0.3 ? item.quiet + dt : 0;
-    if (item.quiet > 0.35) item.armed = false;
+    if (item.quiet > 0.35) {
+      item.armed = false;
+      if (killPrototype) body.type = 'static';
+    }
   }
   for (const target of targets) {
+    if (killPrototype) break;
     if (target.hp > 0) continue;
     target.fall = Math.min(1, target.fall + dt * (1.5 + target.shove / 250));
     target.entity.setEulerAngles(-90 * target.fall, 0, 0);
@@ -1043,4 +1059,6 @@ app.on('update', (rawDt: number) => {
 });
 hud();
 // Inspection surface for browser diagnostics; no separate simulation or fake inventory.
-export { app, player, camera, items, queue, targets, cfg, tiers, grab, fire, loadNext, reset, findFocus };
+export { app, player, camera, items, queue, targets, cfg, tiers, grab, fire, loadNext, reset, findFocus,
+  visual, material, say, slider, el, cancelDraw };
+export type { Item };

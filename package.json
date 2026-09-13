@@ -9,6 +9,7 @@
     "prototype:guard": "vite --open /prototype-guard.html",
     "prototype:sling": "vite --open /prototype-sling.html",
     "prototype:ammo": "vite --open /prototype-ammo.html",
+    "prototype:kill": "vite --open /prototype-kill.html",
     "prototype:pa": "vite --open /prototype-pa.html",
     "pa:setup": "node scripts/setup-pa-tools.mjs",
     "pa:render": "node scripts/render-pa.mjs",
