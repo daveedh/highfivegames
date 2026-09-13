@@ -7,7 +7,8 @@
  */
 import * as pc from 'playcanvas';
 import { app, player, camera, items, targets, cfg, tiers, reset, visual, material,
-  say, slider, el, cancelDraw, type Item } from './ammo-feel';
+  say, slider, el, cancelDraw, interaction, type Item } from './ammo-feel';
+import { installCheckouts } from './upgrade-checkouts';
 import './kill-feel.css';
 
 const presets = [
@@ -24,7 +25,7 @@ const tuning = { ...presets[index], volume: 0.55, stagger: 0.22 };
 cfg.empty = 'click-message';
 const feedback = { hitmarker: true, targetFlash: true, screenShake: true,
   hitStop: true, debris: true, tracer: true, sound: true };
-let hunt = false;
+let hunt = true;
 let hearts = 3;
 let hurtLeft = 0;
 let shake = 0;
@@ -57,12 +58,18 @@ type Guard = (typeof targets)[number] & {
   deathSeconds: number; deathChunks: number; emitted: number; grounded: boolean;
   direction: pc.Vec3; deathOrigin: pc.Vec3; heavy: boolean;
 };
-const guards: Guard[] = [-3, 0, 3].map((x, i) => {
+const patrols = [
+  [[-4, 10], [-4, 17], [0, 17], [0, 10]],
+  [[-10, -6], [-4, -6], [-4, 6], [-10, 6], [-4, 6], [-4, 19], [-10, 19],
+    [-4, 19], [10, 19], [4, 19], [4, 8], [10, 8], [4, 8], [4, -6], [10, -6], [4, -6], [-4, -6]],
+  [[9, 8], [13.5, 8], [13.5, 4], [9, 4]]
+].map(route => route.map(([x, z]) => new pc.Vec3(x, 1.2, z)));
+const guards: Guard[] = patrols.map((route, i) => {
   const entity = new pc.Entity(`guard ${i + 1}`);
   entity.addComponent('collision', { type: 'capsule', radius: 0.45, height: 2.4 });
   entity.addComponent('rigidbody', { type: 'kinematic', friction: 0.6 });
   app.root.addChild(entity);
-  const home = new pc.Vec3(x, 1.2, 4 - i * 5);
+  const home = route[0].clone();
   entity.rigidbody!.teleport(home);
   const model = new pc.Entity('articulated guard');
   entity.addChild(model);
@@ -242,6 +249,7 @@ function resetGuards(): void {
   clearEffects();
   hearts = 3;
   hurtLeft = 0;
+  el('click-to-play').innerHTML = playInstructions;
   for (const g of guards) {
     g.hp = 4;
     g.state = 'patrol';
@@ -266,12 +274,12 @@ function obstruction(g: Guard, from: pc.Vec3, to: pc.Vec3): pc.RaycastResult | u
   return physics.raycastAll(from, to).filter(h => h.entity !== g.entity)
     .sort((a, b) => a.hitFraction - b.hitFraction)[0];
 }
-function move(g: Guard, target: pc.Vec3, speed: number, dt: number): number {
+function move(g: Guard, target: pc.Vec3, speed: number, dt: number, stopAt = 0): number {
   const position = g.entity.getPosition().clone();
   const direction = target.clone().sub(position);
   direction.y = 0;
   const distance = direction.length();
-  if (distance < 0.05) return distance;
+  if (distance < Math.max(0.05, stopAt)) return distance;
   direction.normalize();
   const yaw = Math.atan2(-direction.x, -direction.z) * pc.math.RAD_TO_DEG;
   const delta = ((yaw - g.yaw + 540) % 360) - 180;
@@ -282,7 +290,11 @@ function move(g: Guard, target: pc.Vec3, speed: number, dt: number): number {
     const from = new pc.Vec3(position.x, 0.6, position.z);
     const wall = obstruction(g, from, from.clone().add(dir.clone().mulScalar(1.1)));
     if (wall && wall.entity !== player) continue;
-    position.add(dir.mulScalar(Math.min(distance, speed * dt)));
+    const next = position.clone().add(dir.mulScalar(Math.min(distance - stopAt, speed * dt)));
+    const playerPosition = player.getPosition();
+    // Kinematic guards must not overlap the dynamic player and squeeze it through scenery.
+    if (Math.hypot(next.x - playerPosition.x, next.z - playerPosition.z) < 1.25) continue;
+    position.copy(next);
     clear = true;
     break;
   }
@@ -349,7 +361,7 @@ function tickGuard(g: Guard, dt: number): void {
     return;
   }
   g.model.setLocalEulerAngles(g.reaction > 0 ? -12 * g.reaction / Math.max(0.01, tuning.stagger) : 0, 0, 0);
-  if (!hunt || hearts === 0 || g.reaction > 0) return;
+  if (!hunt || hearts === 0 || g.reaction > 0 || !document.pointerLockElement) return;
   const eye = g.entity.getPosition().clone().add(new pc.Vec3(0, 0.8, 0));
   const toPlayer = player.getPosition().clone().sub(eye);
   const distance = Math.hypot(toPlayer.x, toPlayer.z);
@@ -369,14 +381,14 @@ function tickGuard(g: Guard, dt: number): void {
     if (g.state === 'chase' && g.unseen > 5) { g.state = 'search'; g.search = 10; }
   }
   if (g.state === 'chase') {
-    move(g, g.lastKnown, 7, dt);
+    move(g, g.lastKnown, 7, dt, 1.25);
     if (distance < 1.7 && visible && hurtLeft === 0) {
       hearts--;
       hurtLeft = 0.9;
       const push = player.getPosition().clone().sub(g.entity.getPosition()).normalize().mulScalar(620);
       player.rigidbody!.applyImpulse(push);
       say(hearts ? `Guard hit you. ${hearts}/3 hearts.` : 'Three hits. Press Esc, then Reset playtest.');
-      if (!hearts) { cancelDraw(); document.exitPointerLock(); }
+      if (!hearts) { cancelDraw(); showRunOver(); document.exitPointerLock(); }
     }
   } else if (g.state === 'search') {
     g.search -= dt;
@@ -386,8 +398,8 @@ function tickGuard(g: Guard, dt: number): void {
     }
     if (g.search <= 0) g.state = 'patrol';
   } else if (g.state === 'patrol') {
-    const destination = g.home.clone().add(new pc.Vec3(g.waypoint % 2 ? 1 : -1, 0, g.waypoint < 2 ? 2 : -2));
-    if (move(g, destination, 3, dt) < 0.5) g.waypoint = (g.waypoint + 1) % 4;
+    const route = patrols[guards.indexOf(g)];
+    if (move(g, route[g.waypoint], 3, dt) < 0.5) g.waypoint = (g.waypoint + 1) % route.length;
   }
   for (const p of g.parts) {
     if (p.entity.name === 'leg' || p.entity.name === 'arm') {
@@ -398,12 +410,13 @@ function tickGuard(g: Guard, dt: number): void {
 
 el('readout').innerHTML = `<h1>THROWAWAY: make the kill land</h1><div id="state"></div>
   <div id="kill-state"></div><p class="instructions">Start with one Light hit, then finish with a Heavy.
-  Compare A / B / C. Esc opens the six feedback switches. Reset restores the same test.</p>
-  <p class="instructions dim">Wreckage stays movable: walk into it to kick it. Stand-still targets first;
-  enable hunting when ready. This is not the final showroom.</p>`;
+  Find The Band in Bedrooms, then Bigger Pouch in Children's. Carry each box to its nearby
+  self-checkout. Esc opens the feedback switches. Reset restores stock and upgrades.</p>
+  <p class="instructions dim">Wreckage stays movable: walk into it to kick it.
+  Guards hunt by default. This is a combat playtest, not the final showroom snake.</p>`;
 el('panel').innerHTML = `<h2>Chosen: C / controls kept for tuning</h2><p id="kill-blurb"></p>
   <div id="kill-toggles"></div><div id="kill-knobs"></div>
-  <label><input id="hunt" type="checkbox"> Guards hunt (three hearts)</label>
+  <label><input id="hunt" type="checkbox" checked> Guards hunt (three hearts)</label>
   <h2>Sound effects</h2><p id="kill-audio">Chosen source: synthesized. No voice, joke sting, or victory jingle.</p>
   <button id="audition-hit">Hear impact</button> <button id="audition-death">Hear failure</button>
   <button id="audition-floor">Hear floor impact</button>
@@ -418,10 +431,20 @@ marker.textContent = '\u00d7';
 el('proto-ui').appendChild(marker);
 el('click-to-play').innerHTML = `<div><h1>Make the kill land.</h1><p>Click the showroom to play.</p>
   <p>WASD / Shift / Space<br>E grab / hold left mouse, release to fire<br>Right mouse cancels / Esc tunes</p>
-  <p>Start at the yellow shelf, grab a Light and a Heavy, then face the three guards in the centre aisle.</p>
+  <p>E grabs stock or an upgrade box. Both hands are full until you place the box in its self-checkout.
+  Stay nearby for three seconds. Interrupted processing resumes when you return.</p>
+  <p>The Band: Bedrooms, on the roamer's route. Bigger Pouch: Children's, on a zoned guard's loop.</p>
   <p>A: stagger and collapse<br>B: armour coming apart<br>C: electrical failure</p>
   <p class="dim">Chosen: C at its defaults. Arrows keep A/B available for later comparison.
   Switching resets the playtest.</p></div>`;
+const playInstructions = el('click-to-play').innerHTML;
+interaction.blockedReason = () => hearts === 0 ? 'Three hits. Restart the playtest to continue.' : '';
+function showRunOver(): void {
+  el('click-to-play').innerHTML = `<div><h1>Three hits. Run over.</h1>
+    <p>Restart to move, fire or collect upgrades.</p>
+    <button id="restart-run">Restart playtest</button></div>`;
+  el('restart-run').onclick = event => { event.stopPropagation(); reset(); };
+}
 const labels: Record<keyof typeof feedback, string> = {
   hitmarker: 'Hitmarker', targetFlash: 'Target flash', screenShake: 'Screen shake',
   hitStop: 'Hit stop (45 / 75 ms)', debris: 'Lasting debris', tracer: 'Shot tracer', sound: 'Sound effects'
@@ -487,6 +510,10 @@ el('copy-kill').onclick = async () => {
   catch (error) { console.warn('Clipboard unavailable', error); say('Select the settings text in the panel.'); }
 };
 window.addEventListener('blur', silence);
+const checkouts = installCheckouts({
+  interrupted: () => hearts === 0 || hurtLeft > 0,
+  soundEnabled: () => feedback.sound
+});
 document.addEventListener('pointerlockchange', () => {
   if (document.pointerLockElement === null) { stopUntil = 0; app.timeScale = 1; }
 });
@@ -506,6 +533,7 @@ app.on('update', (rawDt: number) => {
     camera.translateLocal((Math.random() - 0.5) * shake, (Math.random() - 0.5) * shake, 0);
   }
   for (const g of guards) tickGuard(g, dt);
+  checkouts.tick(dt);
   for (let i = sparks.length - 1; i >= 0; i--) {
     const s = sparks[i];
     s.life -= dt;
@@ -537,4 +565,4 @@ Movable pieces ${fragments.length}/${MAX_FRAGMENTS} | ${guards.filter(g => g.sta
 });
 refresh();
 resetGuards();
-export { guards, feedback, tuning, fragments, sparks, settings };
+export { guards, feedback, tuning, fragments, sparks, settings, checkouts };

@@ -11,6 +11,7 @@
  */
 import * as pc from 'playcanvas';
 import { FirstPersonController } from 'playcanvas/scripts/esm/first-person-controller.mjs';
+import { Upgrades } from '../upgrades';
 import './walk-feel.css';
 import './sling-feel.css';
 import './ammo-feel.css';
@@ -36,6 +37,12 @@ const params = new URLSearchParams(location.search);
 const killPrototype = document.body.dataset.prototype === 'kill';
 let variantIndex = Math.max(0, variants.findIndex(v => v.key === (killPrototype ? 'B' : (params.get('variant') ?? 'B').toUpperCase())));
 const cfg = { ...variants[variantIndex] };
+const upgrades = new Upgrades();
+const interaction = {
+  tryInteract: (): boolean => false,
+  hint: (): string => '',
+  blockedReason: (): string => ''
+};
 
 pc.WasmModule.setConfig('Ammo', {
   glueUrl: 'wasm/ammo.wasm.js', wasmUrl: 'wasm/ammo.wasm.wasm', fallbackUrl: 'wasm/ammo.js'
@@ -567,11 +574,15 @@ function findFocus(): Item | null {
   return best;
 }
 function grab(): void {
+  const blocked = interaction.blockedReason();
+  if (blocked) { say(blocked); return; }
+  if (interaction.tryInteract()) return;
+  if (upgrades.carrying) { say('Both hands full. Carry the box to its self-checkout.'); return; }
   focus = findFocus();
   if (!focus) { say('No stock in reach. Look at a yellow shelf edge.'); return; }
   if (drawing) { say('Release or cancel the draw before grabbing.'); return; }
   const item = focus;
-  if (used() + tiers[item.tier].slots > 5) { say(`${item.name} needs ${tiers[item.tier].slots} slots; ${5 - used()} free. Nothing swapped.`); return; }
+  if (used() + tiers[item.tier].slots > upgrades.capacity) { say(`${item.name} needs ${tiers[item.tier].slots} slots; ${upgrades.capacity - used()} free. Nothing swapped.`); return; }
   item.state = 'pouch';
   item.armed = false;
   item.entity.enabled = false;
@@ -653,6 +664,9 @@ function emptyClick(): void {
   if (cfg.empty === 'shelves') revealUntil = performance.now() + 2400;
 }
 function fire(): void {
+  const blocked = interaction.blockedReason();
+  if (blocked) { cancelDraw(); say(blocked); return; }
+  if (upgrades.carrying) { cancelDraw(); say('Both hands full. Carry the box to its self-checkout.'); return; }
   if (!loaded || cooldown > 0) { if (!loaded) emptyClick(); return; }
   const item = loaded;
   const ch = pc.math.clamp(drawTime / 0.75, 0, 1);
@@ -687,7 +701,7 @@ function fire(): void {
   item.entity.rigidbody!.teleport(muzzle, pc.Quat.IDENTITY);
   item.entity.rigidbody!.linearVelocity = pc.Vec3.ZERO;
   item.entity.rigidbody!.angularVelocity = new pc.Vec3(1.5, 2, 0.5);
-  lastSpeed = pc.math.lerp(14, 48, ch) * tiers[item.tier].speed;
+  lastSpeed = upgrades.shotSpeed(ch, tiers[item.tier].speed);
   item.entity.rigidbody!.applyImpulse(direction.mulScalar(lastSpeed * tiers[item.tier].mass));
   cooldown = 0.35;
   fired++;
@@ -697,6 +711,7 @@ function fire(): void {
 function cancelDraw(): void { drawing = false; drawTime = 0; }
 function reset(): void {
   cancelDraw();
+  upgrades.reset();
   queue.length = 0;
   loaded = null;
   showLoaded();
@@ -923,21 +938,21 @@ const icons: Record<Shape, string> = {
 };
 let pouchKey = '';
 function hud(): void {
-  const key = queue.map(i => i.name).join(',') + ':' + loaded?.name;
+  const key = queue.map(i => i.name).join(',') + ':' + loaded?.name + ':' + upgrades.capacity;
   if (key !== pouchKey) {
     pouchKey = key;
     el('ammo-queue').innerHTML = queue.length ? queue.map((item, index) =>
       `<div class="ammo-card ${item === loaded ? 'loaded' : ''}"><svg viewBox="0 0 36 32" aria-label="${item.shape}">${icons[item.shape]}</svg>
       ${item.name}<small>${index === 0 ? (loaded ? 'LOADED' : 'NEXT') : 'QUEUED'} / ${tiers[item.tier].slots} slots</small></div>`).join('') : '<div class="ammo-card">EMPTY<small>E to grab</small></div>';
-    el('ammo-slots').innerHTML = Array.from({ length: 5 }, (_, i) => `<i class="${i >= used() ? 'free' : ''}"></i>`).join('');
+    el('ammo-slots').innerHTML = Array.from({ length: upgrades.capacity }, (_, i) => `<i class="${i >= used() ? 'free' : ''}"></i>`).join('');
   }
-  const free = 5 - used();
+  const free = upgrades.capacity - used();
   const blocked = focus && tiers[focus.tier].slots > free;
-  el('ammo-focus').textContent = focus ? `${focus.name} / ${focus.tier} / ${tiers[focus.tier].slots} slots\n${blocked ? `Needs ${tiers[focus.tier].slots}; ${free} free` : 'E - grab'}` : '';
+  el('ammo-focus').textContent = interaction.hint() || (focus ? `${focus.name} / ${focus.tier} / ${tiers[focus.tier].slots} slots\n${blocked ? `Needs ${tiers[focus.tier].slots}; ${free} free` : 'E - grab'}` : '');
   el('ammo-focus').classList.toggle('blocked', Boolean(blocked));
   el('crosshair').classList.toggle('drawing', drawing || Boolean(focus));
   el('crosshair').classList.toggle('empty', !loaded && !focus);
-  el('state').textContent = `${used()}/5 slots | ${queue.length} carried | ${items.length - queue.length} in world | 40 total
+  el('state').textContent = `${used()}/${upgrades.capacity} slots | ${queue.length} carried | ${items.length - queue.length} in world | 40 total
     | ${loaded ? `loaded: ${loaded.name}` : 'unloaded'} | ${fired} fired | last ${lastSpeed.toFixed(1)} m/s
     | targets ${targets.map(t => t.hp).join('/')} HP`;
 }
@@ -956,8 +971,11 @@ function project(label: HTMLElement, point: pc.Vec3, show: boolean): void {
 }
 app.mouse!.on(pc.EVENT_MOUSEDOWN, (event: pc.MouseEvent) => {
   if (!locked()) return;
+  const blocked = interaction.blockedReason();
+  if (blocked) { say(blocked); return; }
   if (event.button === pc.MOUSEBUTTON_RIGHT) { cancelDraw(); return; }
   if (event.button !== pc.MOUSEBUTTON_LEFT || cooldown > 0) return;
+  if (upgrades.carrying) { say('Both hands full. Carry the box to its self-checkout.'); return; }
   if (!loaded) { emptyClick(); return; }
   drawing = true; drawTime = 0;
 });
@@ -969,6 +987,8 @@ app.mouse!.on(pc.EVENT_MOUSEUP, (event: pc.MouseEvent) => {
 canvas.addEventListener('contextmenu', event => event.preventDefault());
 document.addEventListener('pointerlockchange', () => {
   cancelDraw();
+  const blocked = interaction.blockedReason();
+  if (locked() && blocked) { document.exitPointerLock(); say(blocked); return; }
   el('click-to-play').classList.toggle('hidden', locked());
   document.body.classList.toggle('playing', locked());
 });
@@ -998,6 +1018,8 @@ app.on('update', (rawDt: number) => {
   if (!cfg.manual && !loaded && cooldown === 0) loadNext();
   if (drawing) drawTime = Math.min(0.75, drawTime + dt);
   const charge = drawing ? drawTime / 0.75 : 0;
+  controller.enabled = !interaction.blockedReason();
+  if (!controller.enabled) player.rigidbody!.linearVelocity = pc.Vec3.ZERO;
   controller.speedGround = 45 * (drawing ? 0.55 : 1);
 
   // Settled 0.45m step assist, with camera smoothing rather than a camera snap.
@@ -1024,8 +1046,12 @@ app.on('update', (rawDt: number) => {
   const pouch = new pc.Vec3(-charge * 0.06, POUCH_HEIGHT, 0.08 + charge * 0.07);
   cup.setLocalPosition(pouch);
   loadedModel?.setLocalPosition(pouch.clone().add(new pc.Vec3(0, 0, -0.035)));
-  stretch(bandL, tipL, pouch.clone().add(new pc.Vec3(-POUCH_HALF_WIDTH, 0, 0)), BAND_WIDTH);
-  stretch(bandR, tipR, pouch.clone().add(new pc.Vec3(POUCH_HALF_WIDTH, 0, 0)), BAND_WIDTH);
+  const bandClaimed = upgrades.state('band') === 'claimed';
+  for (const band of [bandL, bandR]) band.render!.material = bandClaimed ? red : dark;
+  const bandWidth = bandClaimed ? BAND_WIDTH * 1.8 : BAND_WIDTH;
+  stretch(bandL, tipL, pouch.clone().add(new pc.Vec3(-POUCH_HALF_WIDTH, 0, 0)), bandWidth);
+  stretch(bandR, tipR, pouch.clone().add(new pc.Vec3(POUCH_HALF_WIDTH, 0, 0)), bandWidth);
+  sling.enabled = !upgrades.carrying;
   sling.setLocalPosition(0.26 - charge * 0.03, -0.24 - charge * 0.02, -0.55 + charge * 0.05);
   el('draw-meter').classList.toggle('on', drawing);
   el('draw-meter').classList.toggle('full', charge >= 1);
@@ -1049,7 +1075,7 @@ app.on('update', (rawDt: number) => {
   uiElapsed += dt;
   if (uiElapsed > 0.07) {
     uiElapsed = 0;
-    focus = findFocus();
+    focus = upgrades.carrying ? null : findFocus();
     hud();
     zoneSigns.forEach((sign, i) => project(signEls[i], sign.pos, true));
     items.forEach((item, i) => project(stockMarkerEls[i], item.entity.getPosition().clone().add(new pc.Vec3(0, 0.4, 0)),
@@ -1060,5 +1086,5 @@ app.on('update', (rawDt: number) => {
 hud();
 // Inspection surface for browser diagnostics; no separate simulation or fake inventory.
 export { app, player, camera, items, queue, targets, cfg, tiers, grab, fire, loadNext, reset, findFocus,
-  visual, material, say, slider, el, cancelDraw };
+  visual, material, say, slider, el, cancelDraw, upgrades, interaction, box, ray };
 export type { Item };

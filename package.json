@@ -14,6 +14,8 @@
     "pa:setup": "node scripts/setup-pa-tools.mjs",
     "pa:render": "node scripts/render-pa.mjs",
     "pa:audition": "node scripts/render-pa.mjs --audition",
+    "test:upgrades": "node --test src/upgrades.test.mjs",
+    "test:upgrades:browser": "node --test scripts/test-upgrade-playtest.mjs",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview"
   },
@@ -21,6 +23,7 @@
     "playcanvas": "^2.22.2"
   },
   "devDependencies": {
+    "playwright": "^1.63.0",
     "typescript": "~6.0.3",
     "vite": "^8.3.0"
   },

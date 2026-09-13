@@ -1,0 +1,17 @@
+#checkout-status {
+  position: absolute; top: 65%; left: 50%; transform: translateX(-50%);
+  padding: 8px 12px; white-space: pre-line; color: #fff; background: #142130df;
+}
+#checkout-status:empty { display: none; }
+#upgrade-receipts {
+  position: absolute; right: 20px; top: 80px; width: 275px;
+  display: grid; gap: 10px; pointer-events: none;
+}
+.upgrade-receipt {
+  background: #f7f5e8; color: #17212a; padding: 20px;
+  box-shadow: 0 4px 12px #0005; font: 13px/1.5 monospace;
+}
+.upgrade-receipt h2 { font-size: 16px; color: inherit; }
+.upgrade-receipt p { white-space: pre-line; }
+.upgrade-receipt p:last-child { border-top: 1px dashed #17212a; padding-top: 10px; }
+body:not(.playing) #upgrade-receipts { right: 335px; }
