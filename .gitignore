@@ -2,3 +2,7 @@ node_modules/
 dist/
 *.local
 .DS_Store
+
+# Piper, its voice models and ffmpeg: fetched by `npm run pa:setup`, ~380MB of binaries.
+# Kept out of the repo and out of CI - the PA audio is rendered here and committed as mp3.
+tools/

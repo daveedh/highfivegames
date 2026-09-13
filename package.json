@@ -9,6 +9,10 @@
     "prototype:guard": "vite --open /prototype-guard.html",
     "prototype:sling": "vite --open /prototype-sling.html",
     "prototype:ammo": "vite --open /prototype-ammo.html",
+    "prototype:pa": "vite --open /prototype-pa.html",
+    "pa:setup": "node scripts/setup-pa-tools.mjs",
+    "pa:render": "node scripts/render-pa.mjs",
+    "pa:audition": "node scripts/render-pa.mjs --audition",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview"
   },

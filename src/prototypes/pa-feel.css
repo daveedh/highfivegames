@@ -1,0 +1,272 @@
+/* Signage, not UI chrome: the caption should look like the store printed it, per #17. */
+
+:root {
+  --skrapbo-blue: #0a4d8c;
+  --skrapbo-yellow: #ffd900;
+  --grey-box: #2b2d33;
+}
+
+body {
+  margin: 0;
+  background: var(--grey-box);
+  color: #e8e8ea;
+  font-family: 'Segoe UI', system-ui, sans-serif;
+}
+
+/* ---- the caption --------------------------------------------------------- */
+
+.pa-caption {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 10;
+  display: flex;
+  gap: 0.6rem;
+  align-items: center;
+  justify-content: center;
+  padding: 0.85rem 1.5rem;
+  background: var(--skrapbo-blue);
+  color: var(--skrapbo-yellow);
+  font-size: 1.35rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  opacity: 0;
+  transform: translateY(-100%);
+  transition: opacity 250ms ease, transform 250ms ease;
+}
+
+.pa-caption.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.pa-caption-icon {
+  font-size: 0.9rem;
+  opacity: 0.75;
+}
+
+/* ---- review panel -------------------------------------------------------- */
+
+.pa-panel {
+  max-width: 60rem;
+  margin: 0 auto;
+  padding: 5rem 1.5rem 6rem;
+}
+
+.pa-panel h1 {
+  font-size: 1.6rem;
+  letter-spacing: 0.05em;
+  color: var(--skrapbo-yellow);
+}
+
+.pa-panel h2 {
+  margin: 2.5rem 0 0.25rem;
+  font-size: 1.2rem;
+  border-bottom: 1px solid #44464e;
+  padding-bottom: 0.4rem;
+}
+
+.pa-panel h3 {
+  margin: 1.4rem 0 0.5rem;
+  font-size: 0.85rem;
+  letter-spacing: 0.12em;
+  color: var(--skrapbo-yellow);
+}
+
+.pa-note {
+  margin: 0.35rem 0 0.9rem;
+  color: #9a9ca6;
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+
+.pa-controls,
+.pa-zones {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  margin: 0.75rem 0;
+}
+
+.pa-label {
+  color: #9a9ca6;
+  font-size: 0.85rem;
+}
+
+.pa-btn {
+  background: #3a3d45;
+  color: #e8e8ea;
+  border: 1px solid #55585f;
+  border-radius: 3px;
+  padding: 0.45rem 0.8rem;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.pa-btn:hover {
+  background: #474a53;
+}
+
+.pa-btn-primary {
+  background: var(--skrapbo-blue);
+  border-color: var(--skrapbo-blue);
+  font-weight: 600;
+}
+
+.pa-btn-small {
+  font-size: 0.78rem;
+  padding: 0.3rem 0.6rem;
+}
+
+.pa-btn-play {
+  padding: 0.2rem 0.55rem;
+  font-size: 0.7rem;
+}
+
+.pa-zone {
+  background: transparent;
+  color: #c8cad2;
+  border: 1px solid #55585f;
+  border-radius: 3px;
+  padding: 0.4rem 0.7rem;
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+}
+
+.pa-zone.is-active {
+  background: var(--skrapbo-yellow);
+  border-color: var(--skrapbo-yellow);
+  color: #1a1c22;
+  font-weight: 700;
+}
+
+.pa-status {
+  color: #9a9ca6;
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.pa-row {
+  display: flex;
+  gap: 0.6rem;
+  align-items: center;
+  padding: 0.28rem 0;
+}
+
+.pa-line-text {
+  font-size: 0.92rem;
+}
+
+.pa-voice-name {
+  width: 9rem;
+  font-size: 0.85rem;
+  color: #9a9ca6;
+}
+
+.pa-tag {
+  width: 3.6rem;
+  font-size: 0.65rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #7c7f88;
+}
+
+.pa-tag.is-loaded {
+  color: var(--skrapbo-yellow);
+}
+
+.pa-next {
+  color: #7c7f88;
+  letter-spacing: 0.08em;
+}
+
+.pa-subtitle {
+  margin: -0.25rem 0 0.6rem;
+  color: #9a9ca6;
+  font-size: 0.85rem;
+  font-style: italic;
+}
+
+/* ---- shelf cards --------------------------------------------------------- */
+
+.pa-card {
+  display: grid;
+  grid-template-columns: 9rem 4rem 5rem 1fr;
+  gap: 0.6rem;
+  align-items: baseline;
+  padding: 0.3rem 0;
+  border-bottom: 1px solid #35373e;
+  font-size: 0.88rem;
+}
+
+.pa-card-name {
+  font-weight: 700;
+  letter-spacing: 0.05em;
+}
+
+.pa-card-price {
+  font-variant-numeric: tabular-nums;
+  color: var(--skrapbo-yellow);
+}
+
+.pa-card-tier {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #7c7f88;
+}
+
+.pa-card-tier.is-heavy {
+  color: #e0774a;
+}
+
+.pa-card-tier.is-medium {
+  color: #c8cad2;
+}
+
+.pa-card-desc {
+  color: #9a9ca6;
+}
+
+/* ---- receipts ------------------------------------------------------------ */
+
+.pa-receipt {
+  max-width: 22rem;
+  margin: 1rem 0;
+  padding: 1rem 1.2rem;
+  background: #f4f2ec;
+  color: #23242a;
+  font-family: 'Consolas', ui-monospace, monospace;
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+
+.pa-receipt-head {
+  text-align: center;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  padding-bottom: 0.6rem;
+  border-bottom: 1px dashed #9a9186;
+  margin-bottom: 0.6rem;
+}
+
+.pa-receipt-line {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.pa-receipt-total {
+  margin-top: 0.6rem;
+  padding-top: 0.6rem;
+  border-top: 1px dashed #9a9186;
+  font-weight: 700;
+}
+
+.pa-receipt-desc {
+  color: #5d5f68;
+}
