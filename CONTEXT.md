@@ -26,6 +26,18 @@ _Avoid_: room, area, section
 The store's public address system. Speaks in a calm, normal tone regardless of what is happening (see **Deadpan rule**).
 _Avoid_: announcer, narrator, voiceover
 
+**PA line**:
+One announcement. Never triggered by anything the player does — the store has not noticed you, and any line that fits what you are doing fits by coincidence. A **loaded** line is about merchandise, breakage, safety or tidiness, so it is nearly always almost relevant; a **plain** line is ordinary store ambience, and exists so the loaded ones read as coincidence rather than commentary.
+_Avoid_: announcement, barks, callout, trigger
+
+**Caption**:
+The printed form of a PA line, shown in store signage across the top of the screen. The joke is the words, so they survive bad speakers and the sound being off entirely.
+_Avoid_: subtitle, toast, notification
+
+**Shelf card**:
+The little printed card on a shelf edge: product name, price and a straight-faced descriptor. The descriptor is also where a throwable's weight tier is hinted, so no label has to say it outright.
+_Avoid_: price tag, label, tooltip
+
 ### Merchandise and the slingshot
 
 **Merchandise**:

@@ -125,7 +125,7 @@ export const products: Product[] = [
 export const paLines: PaLine[] = [
   // Living Rooms
   { id: 'living-1', zone: 'living', loaded: true, text: 'Cushions are for sitting on. Not for any other purpose.' },
-  { id: 'living-2', zone: 'living', loaded: true, text: 'Please do not test the sofas by running at them.' },
+  { id: 'living-2', zone: 'living', loaded: true, text: 'Our footstools are heavier than they appear.' },
   { id: 'living-3', zone: 'living', loaded: true, text: 'A vase has been reported broken in Living Rooms.' },
   { id: 'living-4', zone: 'living', loaded: true, text: 'Our lamps are not designed to be thrown.' },
   { id: 'living-5', zone: 'living', loaded: true, text: 'Remote controls are sold separately from the televisions.' },
@@ -137,7 +137,7 @@ export const paLines: PaLine[] = [
   { id: 'dining-2', zone: 'dining', loaded: true, text: 'Breakages must be reported. Most of them are not.' },
   { id: 'dining-3', zone: 'dining', loaded: true, text: 'Our glassware is toughened. It is not unbreakable.' },
   { id: 'dining-4', zone: 'dining', loaded: true, text: 'The dining chairs are rated to one hundred and ten kilograms.' },
-  { id: 'dining-5', zone: 'dining', loaded: true, text: 'A customer is waiting at the dining display.' },
+  { id: 'dining-5', zone: 'dining', loaded: true, text: 'The candles in Dining are not to be lit.' },
   { id: 'dining-6', zone: 'dining', loaded: false, text: 'Table settings shown are for display purposes only.' },
   { id: 'dining-7', zone: 'dining', loaded: false, text: 'Our dining range is available in three finishes.' },
 
@@ -157,7 +157,7 @@ export const paLines: PaLine[] = [
   { id: 'kitchens-4', zone: 'kitchens', loaded: true, text: 'Knives are kept behind the counter for obvious reasons.' },
   { id: 'kitchens-5', zone: 'kitchens', loaded: true, text: 'There is a spillage in Kitchens. Someone will attend.' },
   { id: 'kitchens-6', zone: 'kitchens', loaded: false, text: 'The kitchen display is not connected to the water.' },
-  { id: 'kitchens-7', zone: 'kitchens', loaded: false, text: 'Our kitchen planning service is available by appointment.' },
+  { id: 'kitchens-7', zone: 'kitchens', loaded: false, text: 'Kitchen units are available in nine different finishes.' },
 
   // Children's
   { id: 'childrens-1', zone: 'childrens', loaded: true, text: 'The toys in this department are for demonstration only.' },
