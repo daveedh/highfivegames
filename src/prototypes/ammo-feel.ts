@@ -730,6 +730,7 @@ ui.innerHTML = `
   <div id="panel"><h2>Grab / load comparison</h2><p id="blurb"></p>
     <div id="grab-knobs"></div>
     <label>Empty-pouch feedback<select id="empty-mode"><option value="text">Message only</option><option value="shelves">Message + visible stock markers</option><option value="click">Dry-fire click</option><option value="click-message">Click + message</option></select></label>
+    <p class="note">Active empty-pouch mode: <b id="empty-mode-active">text</b></p>
     <details id="audio-diagnostics"><summary>Audio diagnostics (deferred)</summary>
       <button id="test-click">Test click</button> <button id="test-tone">Test tone</button> <button id="test-wa-tone">Test Web Audio tone</button><p class="note" id="sound-status"></p>
       <audio id="reference-tone" controls style="width:100%" aria-label="Reference tone audio player"></audio>
@@ -774,7 +775,11 @@ function panel(): void {
   const select = el('empty-mode');
   if (select instanceof HTMLSelectElement) {
     select.value = cfg.empty;
-    select.onchange = () => { cfg.empty = select.value; };
+    el('empty-mode-active').textContent = cfg.empty;
+    select.onchange = () => {
+      cfg.empty = select.value;
+      el('empty-mode-active').textContent = cfg.empty;
+    };
   }
   el('tier-knobs').replaceChildren();
   for (const key of ['light', 'medium', 'heavy'] as const) {
