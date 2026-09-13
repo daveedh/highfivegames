@@ -12,6 +12,12 @@ in front of spawn. Guards patrol at 2.2 m/s, chase at 4.8 m/s, and search at
 **Guard difficulty** section in the tuning panel exposes all five values.
 Guards stop short of the player to attack: their kinematic collision bodies
 must not overlap the player and squeeze it through the showroom walls.
+Blocked pursuit and patrol routes use a small cached navigation grid built
+from the showroom's static box geometry, with clearance for the guard's whole
+body. Routes go around shelf ends and wall corners; they do not cut through
+them. Search rotation and vision comparisons wrap angles after every full
+turn, so a searching guard can still spot you in front of it. An unreachable
+destination is shown as **route blocked** in the guard readout.
 
 Find **The Band** on the low display in Bedrooms, then **Bigger Pouch** on the
 low display in Children's. Aim at a box and press E to carry it. You cannot
@@ -40,9 +46,11 @@ carried boxes and receipt paper are visual-only, so the existing maximum of
 dynamic bodies.
 
 `npm run test:upgrades` covers the shared checkout and upgrade rules.
+`npm run test:guards` covers angle wrapping and collision-clear routes.
 With the dev server running, `npm run test:upgrades:browser` exercises actual
 pickup, firing restrictions, interrupted checkout, receipts, capacity, death,
-restart and guard pressure at all four walls and a corner. It uses Edge on
+restart, search reacquisition, corner pursuit and guard pressure at all four
+walls and a corner. It uses Edge on
 Windows; elsewhere run `npx playwright install chromium` first. Set
 `PLAYTEST_URL` for a server other than `http://127.0.0.1:5173`, or
 `PLAYWRIGHT_CHANNEL` to select another installed browser.

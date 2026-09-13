@@ -16,6 +16,7 @@
     "pa:audition": "node scripts/render-pa.mjs --audition",
     "test:upgrades": "node --test src/upgrades.test.mjs",
     "test:upgrades:browser": "node --test scripts/test-upgrade-playtest.mjs",
+    "test:guards": "node --test src/prototypes/guard-navigation.test.mjs",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview"
   },

@@ -12,6 +12,7 @@
 import * as pc from 'playcanvas';
 import { FirstPersonController } from 'playcanvas/scripts/esm/first-person-controller.mjs';
 import { Upgrades } from '../upgrades';
+import type { Obstacle } from './guard-navigation';
 import './walk-feel.css';
 import './sling-feel.css';
 import './ammo-feel.css';
@@ -95,6 +96,7 @@ function visual(parent: pc.Entity, type: string, size: number[], pos: number[], 
   parent.addChild(e);
   return e;
 }
+const navigationObstacles: Obstacle[] = [];
 function box(name: string, pos: number[], size: number[], m = grey): pc.Entity {
   const e = new pc.Entity(name);
   e.setPosition(pos[0], pos[1], pos[2]);
@@ -103,6 +105,12 @@ function box(name: string, pos: number[], size: number[], m = grey): pc.Entity {
   e.addComponent('collision', { type: 'box', halfExtents: new pc.Vec3(size[0] / 2, size[1] / 2, size[2] / 2) });
   e.addComponent('rigidbody', { type: 'static', friction: 0.7, restitution: 0.3 });
   app.root.addChild(e);
+  if (pos[1] + size[1] / 2 > 0.1 && pos[1] - size[1] / 2 < 2.4) {
+    navigationObstacles.push({
+      minX: pos[0] - size[0] / 2, maxX: pos[0] + size[0] / 2,
+      minZ: pos[2] - size[2] / 2, maxZ: pos[2] + size[2] / 2
+    });
+  }
   return e;
 }
 const showroom = {
@@ -1091,5 +1099,5 @@ app.on('update', (rawDt: number) => {
 hud();
 // Inspection surface for browser diagnostics; no separate simulation or fake inventory.
 export { app, player, camera, items, queue, targets, cfg, tiers, grab, fire, loadNext, reset, findFocus,
-  visual, material, say, slider, el, cancelDraw, upgrades, interaction, box, ray, showroom };
+  visual, material, say, slider, el, cancelDraw, upgrades, interaction, box, ray, showroom, navigationObstacles };
 export type { Item };

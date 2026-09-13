@@ -7,8 +7,9 @@
  */
 import * as pc from 'playcanvas';
 import { app, player, camera, items, targets, cfg, tiers, reset, visual, material,
-  say, slider, el, cancelDraw, interaction, type Item } from './ammo-feel';
+  say, slider, el, cancelDraw, interaction, showroom, navigationObstacles, type Item } from './ammo-feel';
 import { installCheckouts } from './upgrade-checkouts';
+import { GuardNavigation, wrapAngle, type Point } from './guard-navigation';
 import './kill-feel.css';
 
 const presets = [
@@ -58,6 +59,7 @@ type Guard = (typeof targets)[number] & {
   reaction: number; flash: number; deathTime: number; deathStyle: string;
   deathSeconds: number; deathChunks: number; emitted: number; grounded: boolean;
   direction: pc.Vec3; deathOrigin: pc.Vec3; heavy: boolean;
+  route: Point[]; routeTarget: pc.Vec3; routeTimer: number; routeBlocked: boolean;
 };
 const patrols = [
   [[-4, 10], [-4, 17], [0, 17], [0, 10]],
@@ -94,7 +96,8 @@ const guards: Guard[] = patrols.map((route, i) => {
     state: 'patrol', yaw: 180, waypoint: 0, seeing: 0, unseen: 0, search: 0,
     lastKnown: home.clone(), reaction: 0, flash: 0, deathTime: 0, deathStyle: 'A',
     deathSeconds: 1, deathChunks: 0, emitted: 0, grounded: false,
-    direction: new pc.Vec3(0, 0, -1), deathOrigin: home.clone(), heavy: false };
+    direction: new pc.Vec3(0, 0, -1), deathOrigin: home.clone(), heavy: false,
+    route: [], routeTarget: home.clone(), routeTimer: 0, routeBlocked: false };
   targets.push(guard);
   entity.setEulerAngles(0, 180, 0);
   return guard;
@@ -258,6 +261,9 @@ function resetGuards(): void {
     g.waypoint = 0;
     g.seeing = g.unseen = g.search = g.reaction = g.flash = g.deathTime = g.emitted = 0;
     g.grounded = false;
+    g.route = [];
+    g.routeTimer = 0;
+    g.routeBlocked = false;
     g.entity.rigidbody!.type = 'kinematic';
     g.entity.collision!.enabled = true;
     g.entity.rigidbody!.teleport(g.home, new pc.Quat().setFromEulerAngles(0, 180, 0));
@@ -277,21 +283,40 @@ function obstruction(g: Guard, from: pc.Vec3, to: pc.Vec3): pc.RaycastResult | u
 }
 function move(g: Guard, target: pc.Vec3, speed: number, dt: number, stopAt = 0): number {
   const position = g.entity.getPosition().clone();
-  const direction = target.clone().sub(position);
-  direction.y = 0;
-  const distance = direction.length();
-  if (distance < Math.max(0.05, stopAt)) return distance;
+  const distance = Math.hypot(target.x - position.x, target.z - position.z);
+  if (distance < Math.max(0.05, stopAt)) { g.routeBlocked = false; return distance; }
+  g.routeTimer = Math.max(0, g.routeTimer - dt);
+  let destination: Point = target;
+  if (navigation.clear(position, target)) {
+    g.route = [];
+    g.routeBlocked = false;
+  } else {
+    if (g.routeTimer === 0 || g.routeTarget.distance(target) > 1) {
+      const route = navigation.route(position, target);
+      g.route = route ?? [];
+      g.routeBlocked = route === null;
+      g.routeTarget.copy(target);
+      g.routeTimer = 0.6;
+    }
+    while (g.route.length && Math.hypot(g.route[0].x - position.x, g.route[0].z - position.z) < 0.15) g.route.shift();
+    if (!g.route.length) return distance;
+    destination = g.route[0];
+  }
+  const direction = new pc.Vec3(destination.x - position.x, 0, destination.z - position.z);
+  const legDistance = direction.length();
   direction.normalize();
   const yaw = Math.atan2(-direction.x, -direction.z) * pc.math.RAD_TO_DEG;
-  const delta = ((yaw - g.yaw + 540) % 360) - 180;
-  g.yaw += pc.math.clamp(delta, -400 * dt, 400 * dt);
+  const delta = wrapAngle(yaw - g.yaw);
+  g.yaw = wrapAngle(g.yaw + pc.math.clamp(delta, -400 * dt, 400 * dt));
   let clear = false;
   for (const angle of [0, 55, -55]) {
     const dir = new pc.Quat().setFromEulerAngles(0, angle, 0).transformVector(direction);
+    const step = Math.min(legDistance, distance - stopAt, speed * dt);
+    const next = position.clone().add(dir.mulScalar(step));
+    if (!navigation.clear(position, next)) continue;
     const from = new pc.Vec3(position.x, 0.6, position.z);
-    const wall = obstruction(g, from, from.clone().add(dir.clone().mulScalar(1.1)));
+    const wall = obstruction(g, from, new pc.Vec3(next.x, 0.6, next.z));
     if (wall && wall.entity !== player) continue;
-    const next = position.clone().add(dir.mulScalar(Math.min(distance - stopAt, speed * dt)));
     const playerPosition = player.getPosition();
     // Kinematic guards must not overlap the dynamic player and squeeze it through scenery.
     if (Math.hypot(next.x - playerPosition.x, next.z - playerPosition.z) < 1.25) continue;
@@ -367,7 +392,7 @@ function tickGuard(g: Guard, dt: number): void {
   const toPlayer = player.getPosition().clone().sub(eye);
   const distance = Math.hypot(toPlayer.x, toPlayer.z);
   const desiredYaw = Math.atan2(-toPlayer.x, -toPlayer.z) * pc.math.RAD_TO_DEG;
-  const inCone = Math.abs(((desiredYaw - g.yaw + 540) % 360) - 180) <= guardTuning.halfCone;
+  const inCone = Math.abs(wrapAngle(desiredYaw - g.yaw)) <= guardTuning.halfCone;
   const hit = obstruction(g, eye, camera.getPosition());
   const visible = distance < guardTuning.sightRange && inCone && (!hit || hit.entity === player);
   if (visible) {
@@ -394,7 +419,7 @@ function tickGuard(g: Guard, dt: number): void {
   } else if (g.state === 'search') {
     g.search -= dt;
     if (move(g, g.lastKnown, guardTuning.searchSpeed, dt) < 1) {
-      g.yaw += 140 * dt;
+      g.yaw = wrapAngle(g.yaw + 140 * dt);
       g.entity.setEulerAngles(0, g.yaw, 0);
     }
     if (g.search <= 0) g.state = 'patrol';
@@ -523,6 +548,7 @@ const checkouts = installCheckouts({
   interrupted: () => hearts === 0 || hurtLeft > 0,
   soundEnabled: () => feedback.sound
 });
+const navigation = new GuardNavigation(showroom.width, showroom.depth, navigationObstacles);
 document.addEventListener('pointerlockchange', () => {
   if (document.pointerLockElement === null) { stopUntil = 0; app.timeScale = 1; }
 });
@@ -567,7 +593,7 @@ app.on('update', (rawDt: number) => {
     hudTime = 0;
     const dynamic = 1 + fragments.length + guards.filter(g => g.entity.rigidbody!.type === 'dynamic').length +
       items.filter(i => i.entity.enabled && i.entity.rigidbody!.type === 'dynamic').length;
-    el('kill-state').textContent = `${tuning.key}: ${guards.map(g => `${g.hp}/4 ${g.state}`).join(' | ')}
+    el('kill-state').textContent = `${tuning.key}: ${guards.map(g => `${g.hp}/4 ${g.state}${g.routeBlocked ? ' (route blocked)' : ''}`).join(' | ')}
 ${hunt ? `Hearts ${hearts}/3` : 'Hunting OFF'} | dynamic bodies ${dynamic}/40
 Sight ${guardTuning.sightRange} m / ${guardTuning.halfCone * 2} degrees | chase ${guardTuning.chaseSpeed.toFixed(1)} m/s
 Movable pieces ${fragments.length}/${MAX_FRAGMENTS} | ${guards.filter(g => g.state === 'down').length}/3 down`;

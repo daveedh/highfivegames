@@ -65,6 +65,89 @@ async function collect(page, tier, index = 0) {
   await page.keyboard.press('KeyE');
 }
 
+test('a searching guard reacquires a player ahead after multiple full turns', async () => {
+  await scene(async page => {
+    await page.evaluate(() => {
+      for (const guard of combat.guards.slice(1)) { guard.state = 'down'; guard.entity.enabled = false; }
+      const guard = combat.guards[0];
+      guard.entity.rigidbody.teleport(2, 1.2, 10);
+      guard.yaw = 1080;
+      guard.entity.setEulerAngles(0, guard.yaw, 0);
+      guard.state = 'search';
+      guard.search = 10;
+      guard.seeing = 0;
+      guard.lastKnown.copy(guard.entity.getPosition());
+      pose(2, 6, guard.entity.getPosition());
+    });
+    await page.waitForTimeout(750);
+    assert.equal(await page.evaluate(() => combat.guards[0].state), 'chase');
+  }, true);
+});
+
+test('a chasing guard rounds a blocking wall corner to reach the last seen position', async () => {
+  await scene(async page => {
+    await page.evaluate(() => {
+      for (const guard of combat.guards.slice(1)) { guard.state = 'down'; guard.entity.enabled = false; }
+      const guard = combat.guards[0];
+      guard.entity.rigidbody.teleport(5, 1.2, -12);
+      guard.yaw = -90;
+      guard.entity.setEulerAngles(0, guard.yaw, 0);
+      guard.state = 'chase';
+      guard.unseen = 0;
+      pose(9, -12, guard.entity.getPosition());
+      guard.lastKnown.copy(ammo.player.getPosition());
+      window.clippedCorner = false;
+      ammo.app.on('update', () => {
+        const p = guard.entity.getPosition();
+        if (p.x > 6.4 && p.x < 7.6 && p.z > -15.95 && p.z < -8.05) clippedCorner = true;
+      });
+    });
+    await page.waitForTimeout(6500);
+    const position = await page.evaluate(() => {
+      const guard = combat.guards[0], p = guard.entity.getPosition();
+      return { x: p.x, z: p.z, state: guard.state };
+    });
+    assert.ok(position.x > 7.7, JSON.stringify(position));
+    assert.equal(await page.evaluate(() => clippedCorner), false);
+  }, true);
+});
+
+test('fixing search reacquisition does not let guards see through a wall', async () => {
+  await scene(async page => {
+    await page.evaluate(() => {
+      for (const guard of combat.guards.slice(1)) { guard.state = 'down'; guard.entity.enabled = false; }
+      const guard = combat.guards[0];
+      guard.entity.rigidbody.teleport(5, 1.2, -12);
+      guard.yaw = -90 + 1080;
+      guard.state = 'search';
+      guard.search = 10;
+      guard.seeing = 0;
+      guard.lastKnown.copy(guard.entity.getPosition());
+      pose(9, -12, guard.entity.getPosition());
+    });
+    await page.waitForTimeout(750);
+    assert.equal(await page.evaluate(() => combat.guards[0].state), 'search');
+    assert.equal(await page.evaluate(() => combat.guards[0].seeing), 0);
+  }, true);
+});
+
+test('pursuit routes around the wide starting shelf instead of stalling behind it', async () => {
+  await scene(async page => {
+    await page.evaluate(() => {
+      for (const guard of combat.guards.slice(1)) { guard.state = 'down'; guard.entity.enabled = false; }
+      const guard = combat.guards[0];
+      guard.entity.rigidbody.teleport(-10, 1.2, 21);
+      guard.state = 'chase';
+      guard.unseen = 0;
+      guard.yaw = 180;
+      pose(-10, 26, guard.entity.getPosition());
+      guard.lastKnown.copy(ammo.player.getPosition());
+    });
+    await page.waitForTimeout(8000);
+    assert.ok(await page.evaluate(() => combat.guards[0].entity.getPosition().z > 24.5));
+  }, true);
+});
+
 test('the larger showroom starts beside throwables without an immediate chase', async () => {
   await scene(async page => {
     const opening = await page.evaluate(() => ({
